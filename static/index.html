@@ -149,6 +149,14 @@ const TRIP_DATES=['2026-02-26','2026-02-27','2026-02-28','2026-03-01','2026-03-0
 const DAY_LABELS=['Day1 佐賀市','Day2 唐津','Day3 伊万里→嬉野','Day4 豪斯登堡','Day5 鹿島・太良','Day6 回程'];
 const DAY_SHORT=['D1','D2','D3','D4','D5','D6'];
 const DAY_REGIONS=['佐賀市・神崎','唐津市・呼子','伊万里→武雄→嬉野','嬉野→豪斯登堡','武雄→鹿島→太良','鹿島→佐賀機場'];
+const DAY_TIPS={
+'2026-02-26':['所有晚餐已預約 18:00，若行程提早/延後可電話調整','帶 3歲+1歲小孩 → 每天下午預留 30分~1hr 彈性時間，以防小孩需要休息'],
+'2026-02-27':['午餐 → からつバーガー（唐津漢堡）12:10 在虹の松原吃，時間剛好！','所有晚餐已預約 18:00，若行程提早/延後可電話調整','帶 3歲+1歲小孩 → 每天下午預留 30分~1hr 彈性時間，以防小孩需要休息'],
+'2026-02-28':['午餐 → 伊万里市區自由覓食（推薦：伊万里牛定食 or 拉麵）~12:00','所有晚餐已預約 18:00，若行程提早/延後可電話調整','帶 3歲+1歲小孩 → 每天下午預留 30分~1hr 彈性時間，以防小孩需要休息'],
+'2026-03-01':['午餐 → 豪斯登堡園區內解決（園內多間餐廳）~12:00','所有晚餐已預約 18:00，若行程提早/延後可電話調整','帶 3歲+1歲小孩 → 每天下午預留 30分~1hr 彈性時間，以防小孩需要休息'],
+'2026-03-02':['大魚神社 → 退潮時海中鳥居最美，建議查當天潮汐表調整時間','所有晚餐已預約 18:00，若行程提早/延後可電話調整','帶 3歲+1歲小孩 → 每天下午預留 30分~1hr 彈性時間，以防小孩需要休息'],
+'2026-03-03':[]
+};
 
 const itinerary={
 '2026-02-26':[
@@ -360,6 +368,13 @@ function renderItinerary(){
     }
     html+=`</div>`;
   });
+  const tips=DAY_TIPS[date]||[];
+  if(tips.length){
+    html+=`<div style="margin:16px 0 8px;padding:10px 12px;background:var(--card);border-radius:12px;border-left:3px solid #ff9800">`;
+    html+=`<div style="font-weight:700;font-size:13px;margin-bottom:6px">⚠️ 注意事項</div>`;
+    tips.forEach(t=>html+=`<div style="font-size:12px;color:var(--text2);line-height:1.7;padding-left:8px">• ${t}</div>`);
+    html+=`</div>`;
+  }
   panel.innerHTML=html;
   if(isToday){updateCountdown();const nc=panel.querySelector('.card.now');if(nc) setTimeout(()=>nc.scrollIntoView({behavior:'smooth',block:'center'}),300);}
 }
