@@ -258,11 +258,13 @@ function init(){
 // === DAY CHIPS ===
 function renderDayChips(){
   const el=document.getElementById('dayChips');
-  el.innerHTML=TRIP_DATES.map((d,i)=>{
+  let html=`<button class="day-chip${currentDay===-1?' active':''}" data-day="-1">ALL 總覽</button>`;
+  html+=TRIP_DATES.map((d,i)=>{
     const dt=new Date(d+'T00:00:00+09:00');
     const wd=['日','一','二','三','四','五','六'][dt.getDay()];
     return `<button class="day-chip${i===currentDay?' active':''}" data-day="${i}">${DAY_SHORT[i]} ${dt.getMonth()+1}/${dt.getDate()}(${wd})</button>`;
   }).join('');
+  el.innerHTML=html;
   el.querySelectorAll('.day-chip').forEach(b=>{
     b.onclick=()=>{
       currentDay=+b.dataset.day;
@@ -290,6 +292,7 @@ function renderMap(){
   mapMarkers.forEach(m=>leafletMap.removeLayer(m));
   mapLines.forEach(l=>leafletMap.removeLayer(l));
   mapMarkers=[];mapLines=[];
+  if(currentDay===-1){ renderOverallMap(); return; }
   const date=TRIP_DATES[currentDay], allItems=itinerary[date]||[];
   const items=allItems.filter(i=>i.coords&&i.coords[0]>30);
   if(!items.length) return;
@@ -317,6 +320,33 @@ function renderMap(){
   leafletMap.fitBounds(bounds,{padding:[30,30]});
 }
 
+function renderOverallMap(){
+  const dayColors=['#e91e63','#ff9800','#4caf50','#2196f3','#9c27b0','#607d8b'];
+  const allBounds=[];
+  TRIP_DATES.forEach((date,di)=>{
+    const items=(itinerary[date]||[]).filter(i=>i.coords&&i.coords[0]>30);
+    if(!items.length) return;
+    const color=dayColors[di]||'#999';
+    const routeCoords=[];
+    items.forEach(item=>{
+      const labelIcon=L.divIcon({html:`<div class="marker-label" style="background:${color}">${DAY_SHORT[di]} ${item.icon} ${item.name}</div>`,iconSize:[null,null],iconAnchor:[12,14],className:''});
+      const marker=L.marker([item.coords[0],item.coords[1]],{icon:labelIcon}).addTo(leafletMap);
+      let ph=`<div class="popup-title">${item.icon} ${item.name}</div>`;
+      ph+=`<div>${DAY_SHORT[di]} ${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
+      ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.name)}" target="_blank">📍 Google Maps</a>`;
+      marker.bindPopup(ph,{maxWidth:260});
+      mapMarkers.push(marker);
+      routeCoords.push([item.coords[0],item.coords[1]]);
+      allBounds.push([item.coords[0],item.coords[1]]);
+    });
+    if(routeCoords.length>1){
+      const line=L.polyline(routeCoords,{color:color,weight:3,opacity:.6,dashArray:'6 4'}).addTo(leafletMap);
+      mapLines.push(line);
+    }
+  });
+  if(allBounds.length) leafletMap.fitBounds(allBounds,{padding:[30,30]});
+}
+
 function highlightCard(idx){
   document.querySelectorAll('.card').forEach(c=>c.classList.remove('highlight'));
   const card=document.getElementById('card-'+idx);
@@ -338,7 +368,9 @@ function focusMap(lat,lng){
 
 // === ITINERARY CARDS ===
 function renderItinerary(){
-  const date=TRIP_DATES[currentDay],items=itinerary[date]||[],panel=document.getElementById('cards-panel');
+  const panel=document.getElementById('cards-panel');
+  if(currentDay===-1){ renderOverallCards(panel); return; }
+  const date=TRIP_DATES[currentDay],items=itinerary[date]||[];
   const now=getNowJST(),isToday=now.dateStr===date;
   let html='';
   if(isToday){
@@ -379,6 +411,23 @@ function renderItinerary(){
   panel.innerHTML=html;
   if(isToday){updateCountdown();const nc=panel.querySelector('.card.now');if(nc) setTimeout(()=>nc.scrollIntoView({behavior:'smooth',block:'center'}),300);}
 }
+function renderOverallCards(panel){
+  const dayColors=['#e91e63','#ff9800','#4caf50','#2196f3','#9c27b0','#607d8b'];
+  let html='<div class="section-title">🗺️ 全行程總覽 — 6天5夜</div>';
+  TRIP_DATES.forEach((date,di)=>{
+    const items=(itinerary[date]||[]).filter(i=>i.coords&&i.coords[0]>30&&i.type!=='transport');
+    if(!items.length) return;
+    const color=dayColors[di];
+    html+=`<div style="margin:12px 0 6px;font-weight:700;font-size:13px;color:${color}">${DAY_SHORT[di]} ${DAY_LABELS[di]}</div>`;
+    items.forEach(item=>{
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;margin:2px 0;background:var(--card);border-radius:8px;border-left:3px solid ${color};font-size:12px;cursor:pointer" onclick="currentDay=${di};document.querySelectorAll('.day-chip').forEach(c=>c.classList.toggle('active',+c.dataset.day===${di}));renderItinerary();renderMap()">`;
+      html+=`<span>${item.icon}</span><span style="flex:1">${item.name}</span><span style="color:var(--text2);font-size:11px">${item.time}</span>`;
+      html+=`</div>`;
+    });
+  });
+  panel.innerHTML=html;
+}
+
 function onCardClick(idx){
   const d=document.getElementById('detail-'+idx);
   if(d) d.classList.toggle('open');
