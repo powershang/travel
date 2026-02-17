@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="佐賀旅行">
+<meta name="theme-color" content="#e91e63">
+<title>2026 佐賀旅行</title>
+<link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjZTkxZTYzIi8+PHRleHQgeD0iOTAiIHk9IjEwNSIgZm9udC1zaXplPSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiPuS9kOizgDwvdGV4dD48dGV4dCB4PSI5MCIgeT0iMTQ1IiBmb250LXNpemU9IjMwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZjY2JjIj7ml4XooYwgMjAyNjwvdGV4dD48L3N2Zz4=">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --pink: #e91e63;
+  --pink-light: #fce4ec;
+  --pink-dark: #c2185b;
+  --bg: #f5f5f5;
+  --card: #fff;
+  --text: #212121;
+  --text2: #757575;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --tab-h: 56px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100vh;height:100dvh;position:fixed;width:100%}
+
+.header{background:linear-gradient(135deg,var(--pink),var(--pink-dark));color:#fff;padding:calc(var(--safe-top)+6px) 16px 6px;display:flex;align-items:center;justify-content:space-between;z-index:100;position:relative}
+.header h1{font-size:17px;font-weight:600}
+.header .subtitle{font-size:11px;opacity:.85}
+.day-chips{display:flex;gap:4px;overflow-x:auto;padding:6px 16px 8px;background:linear-gradient(135deg,var(--pink),var(--pink-dark));-webkit-overflow-scrolling:touch}
+.day-chip{flex-shrink:0;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:500;background:rgba(255,255,255,.2);color:#fff;border:none;cursor:pointer;white-space:nowrap;transition:.2s}
+.day-chip.active{background:#fff;color:var(--pink-dark);font-weight:600}
+
+.tab-bar{position:fixed;bottom:0;left:0;right:0;height:calc(var(--tab-h)+var(--safe-bottom));padding-bottom:var(--safe-bottom);background:#fff;display:flex;border-top:1px solid #e0e0e0;z-index:100}
+.tab-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;color:var(--text2);border:none;background:none;cursor:pointer;padding:4px 0;transition:.2s}
+.tab-item.active{color:var(--pink)}
+.tab-item .icon{font-size:22px}
+
+.content{position:fixed;top:0;left:0;right:0;bottom:calc(var(--tab-h)+var(--safe-bottom));overflow:hidden}
+.page{display:none;height:100%}
+.page.active{display:flex;flex-direction:column;overflow:hidden}
+.page-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 12px 20px;min-height:0}
+
+/* Left-right layout */
+#itinerary-page .itin-body{flex:1;display:flex;flex-direction:row;overflow:hidden}
+#cards-panel{width:45%;min-width:180px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 10px 20px;border-right:1px solid #e0e0e0;background:var(--bg)}
+#map-panel{flex:1;position:relative}
+#map-container{width:100%;height:100%}
+
+/* Portrait phone: stack top=map, bottom=cards */
+@media(max-width:540px) and (orientation:portrait){
+  #itinerary-page .itin-body{flex-direction:column}
+  #cards-panel{width:100%;order:2;flex:1;border-right:none;border-top:2px solid var(--pink-light)}
+  #map-panel{order:1;height:35vh;flex:none}
+}
+
+.now-indicator{background:var(--pink-light);border-left:3px solid var(--pink);padding:7px 10px;margin-bottom:8px;border-radius:8px;font-size:12px;font-weight:500;color:var(--pink-dark)}
+.countdown-bar{background:linear-gradient(135deg,#fff3e0,#ffe0b2);padding:7px 10px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:6px;margin-bottom:8px}
+
+.card{background:var(--card);border-radius:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden;transition:box-shadow .25s}
+.card.now{box-shadow:0 0 0 2px var(--pink),0 2px 8px rgba(233,30,99,.2)}
+.card.highlight{box-shadow:0 0 0 2px #2196f3,0 2px 8px rgba(33,150,243,.3)}
+.card-main{display:flex;align-items:center;padding:10px;gap:8px;cursor:pointer}
+.card-time{font-size:12px;font-weight:600;color:var(--pink-dark);min-width:40px;text-align:center}
+.card-icon{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.card-icon.spot{background:#e8f5e9}.card-icon.restaurant{background:#fff3e0}.card-icon.hotel{background:#fce4ec}.card-icon.transport{background:#e3f2fd}.card-icon.snack{background:#fff8e1}.card-icon.airport{background:#eceff1}
+.card-info{flex:1;min-width:0}
+.card-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-sub{font-size:11px;color:var(--text2);margin-top:1px}
+.card-arrow{color:#ccc;font-size:14px;flex-shrink:0}
+.card-detail{display:none;padding:0 10px 10px;border-top:1px solid #f0f0f0}
+.card-detail.open{display:block}
+.card-actions{display:flex;gap:6px;padding-top:6px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 10px;border-radius:16px;font-size:11px;font-weight:500;border:none;cursor:pointer;text-decoration:none;white-space:nowrap}
+.btn-nav{background:#e3f2fd;color:#1565c0}.btn-call{background:#e8f5e9;color:#2e7d32}.btn-link{background:#fff3e0;color:#e65100}
+.btn:active{opacity:.7}
+.drive-info{display:flex;align-items:center;gap:4px;padding:2px 10px 2px 58px;font-size:10px;color:var(--text2)}
+.drive-info::before{content:'';width:1px;height:10px;background:#ddd}
+.section-title{font-size:12px;font-weight:600;color:var(--text2);padding:6px 0 4px}
+
+.leaflet-popup-content{font-size:12px;line-height:1.5}
+.leaflet-popup-content .popup-title{font-weight:600;font-size:13px;margin-bottom:3px}
+.popup-nav-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:#4285f4;color:#fff;border-radius:6px;text-decoration:none;font-size:11px}
+.popup-call-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:#2e7d32;color:#fff;border-radius:6px;text-decoration:none;font-size:11px}
+.marker-num{width:22px;height:22px;line-height:22px;text-align:center;font-size:11px;font-weight:700;border-radius:50%;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+
+.food-card{background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.food-card .food-name{font-size:15px;font-weight:600}
+.food-card .food-jp{font-size:15px;margin-top:4px;background:#f5f5f5;padding:6px 10px;border-radius:8px;font-weight:500}
+.food-card .food-desc{font-size:13px;margin-top:8px;line-height:1.5}
+.food-tag{display:inline-block;padding:2px 10px;border-radius:12px;font-size:11px;font-weight:500;margin-top:6px;margin-right:4px}
+.food-tag.day{background:var(--pink-light);color:var(--pink-dark)}.food-tag.price{background:#e8f5e9;color:#2e7d32}.food-tag.rating{background:#fff3e0;color:#e65100}
+
+.res-card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.res-header{display:flex;justify-content:space-between;align-items:flex-start}
+.res-name{font-size:15px;font-weight:600}
+.res-date{font-size:11px;font-weight:600;color:#fff;background:var(--pink);padding:3px 10px;border-radius:12px;white-space:nowrap}
+.res-info{margin-top:8px;font-size:12px;line-height:1.7;color:var(--text2)}
+.res-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.res-status{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:18px;font-size:11px;font-weight:500;border:1.5px solid #ddd;background:#fff;cursor:pointer;transition:.2s}
+.res-status.confirmed{background:#e8f5e9;border-color:#4caf50;color:#2e7d32}
+</style>
+</head>
+<body>
+<div class="content">
+  <div id="itinerary-page" class="page active">
+    <div class="header"><div><h1>2026 佐賀旅行</h1><div class="subtitle">2/26 (四) ~ 3/3 (二) ・ 6天5夜</div></div></div>
+    <div class="day-chips" id="dayChips"></div>
+    <div class="itin-body">
+      <div id="cards-panel"></div>
+      <div id="map-panel"><div id="map-container"></div></div>
+    </div>
+  </div>
+  <div id="food-page" class="page">
+    <div class="header"><div><h1>美食指南</h1><div class="subtitle">當地特色美食 日文+中文 給店員看</div></div></div>
+    <div class="page-scroll" id="foodScroll"></div>
+  </div>
+  <div id="res-page" class="page">
+    <div class="header"><div><h1>餐廳預約</h1><div class="subtitle">6 間餐廳預約資訊</div></div></div>
+    <div class="page-scroll" id="resScroll"></div>
+  </div>
+</div>
+<nav class="tab-bar">
+  <button class="tab-item active" data-page="itinerary-page"><span class="icon">📅</span>行程地圖</button>
+  <button class="tab-item" data-page="food-page"><span class="icon">🍽</span>美食</button>
+  <button class="tab-item" data-page="res-page"><span class="icon">📱</span>預約</button>
+</nav>
+
+<script>
+// === DATA (coordinates verified via Google Maps / Tabelog GeoCoordinates) ===
+const TRIP_DATES=['2026-02-26','2026-02-27','2026-02-28','2026-03-01','2026-03-02','2026-03-03'];
+const DAY_LABELS=['Day1 佐賀市','Day2 唐津','Day3 伊万里→嬉野','Day4 豪斯登堡','Day5 鹿島・太良','Day6 回程'];
+const DAY_SHORT=['D1','D2','D3','D4','D5','D6'];
+const DAY_REGIONS=['佐賀市・神崎','唐津市・呼子','伊万里→武雄→嬉野','嬉野→豪斯登堡','武雄→鹿島→太良','鹿島→佐賀機場'];
+
+const itinerary={
+'2026-02-26':[
+  {time:'11:15',name:'抵達佐賀機場',type:'airport',icon:'✈️',coords:[33.14972,130.30222],duration:'',note:'IT246 航班抵達'},
+  {time:'12:15',name:'午餐（自由選擇）',type:'restaurant',icon:'🍽',coords:[33.26159,130.30333],duration:'60分',note:'佐賀市區午餐'},
+  {time:'13:10',name:'神野公園兒童遊戲場',type:'spot',icon:'🎠',coords:[33.26511,130.28172],duration:'90分',note:'兒童遊樂場，適合3歲小孩',drive:'車程約25分'},
+  {time:'15:05',name:'吉野ヶ里歴史公園',type:'spot',icon:'🏯',coords:[33.32394,130.38876],duration:'90分',note:'弥生時代遺跡公園，可看古代住居復原',drive:'車程約25分'},
+  {time:'18:00',name:'佐賀牛レストラン季楽 本店',type:'restaurant',icon:'🥩',coords:[33.26159,130.30333],duration:'90分',note:'已預約 18:00・佐賀牛鐵板燒/涮涮鍋\n¥8,000~¥14,999\nTabelog 3.54 (446評)\n百名店2024',phone:'0952-28-4132',tabelog:'https://tabelog.com/saga/A4101/A410101/41000012/',drive:'車程約30分'},
+  {time:'20:00',name:'airbnb 若宮。薰風',type:'hotel',icon:'🏨',coords:[33.2631,130.2980],duration:'',note:'入住佐賀市區民宿',drive:'車程約5分'}
+],
+'2026-02-27':[
+  {time:'09:30',name:'出發',type:'transport',icon:'🚗',coords:[33.2631,130.2980],duration:''},
+  {time:'10:05',name:'鏡神社 賞梅花',type:'spot',icon:'🌸',coords:[33.43182,130.00841],duration:'40分',note:'梅花季節（2-3月）賞梅名所',drive:'車程約35分'},
+  {time:'11:00',name:'唐津城',type:'spot',icon:'🏯',coords:[33.45351,129.97819],duration:'60分',note:'別名「舞鶴城」，天守閣可眺望唐津灣',drive:'車程約15分'},
+  {time:'12:10',name:'からつバーガー（虹の松原）',type:'snack',icon:'🍔',coords:[33.44427,129.99984],duration:'30分',note:'唐津漢堡・虹の松原名物\n路邊攤車・~¥500',phone:'0955-56-7119',drive:'車程約5分'},
+  {time:'13:05',name:'呼子小吃：いかしゅうまい＋魚ロッケ',type:'snack',icon:'🦑',coords:[33.53709,129.89473],duration:'30分',note:'烏賊燒賣（萬坊 発祥店）~¥500\n魚肉可樂餅 ~¥200',drive:'車程約25分'},
+  {time:'13:45',name:'七ツ釜 遊覽船（マリンパル呼子）',type:'spot',icon:'⛵',coords:[33.53760,129.89330],duration:'90分',note:'柱状節理洞窟遊船體驗\n從マリンパル呼子出發\n天候不佳可能停航',drive:'步行可達'},
+  {time:'15:15',name:'呼子周邊自由活動',type:'spot',icon:'🚶',coords:[33.53709,129.89473],duration:'105分',note:'呼子朝市通散步、海邊散步',drive:''},
+  {time:'18:00',name:'いかの活造り 大和',type:'restaurant',icon:'🦑',coords:[33.52847,129.87946],duration:'90分',note:'已預約 18:00・活烏賊造り\nイカの活き造り定食（一魚兩吃）\n先刺身、再天婦羅\n¥3,000~¥3,999・Tabelog 3.72',phone:'0955-82-3643',tabelog:'https://tabelog.com/saga/A4102/A410201/41000157/',drive:'車程約5分'},
+  {time:'20:00',name:'Riverside Hotel 唐津城',type:'hotel',icon:'🏨',coords:[33.45034,129.98216],duration:'',note:'唐津市區飯店',drive:'車程約30分'}
+],
+'2026-02-28':[
+  {time:'09:30',name:'出發',type:'transport',icon:'🚗',coords:[33.45034,129.98216],duration:''},
+  {time:'10:00',name:'濱野浦梯田展望台',type:'spot',icon:'🌾',coords:[33.48925,129.84735],duration:'30分',note:'日本棚田百選之一，拍照景點',drive:'車程約25分'},
+  {time:'11:10',name:'伊万里梅園 藤ノ尾',type:'spot',icon:'🌸',coords:[33.29203,129.87567],duration:'50分',note:'伊萬里梅花園，2-3月盛開',drive:'車程約40分'},
+  {time:'12:00',name:'伊万里市區午餐',type:'restaurant',icon:'🍽',coords:[33.29203,129.87567],duration:'60分',note:'可嘗試伊萬里牛'},
+  {time:'13:40',name:'御船山樂園',type:'spot',icon:'⛰️',coords:[33.18230,130.01798],duration:'90分',note:'國登錄紀念物・庭園\nteamLab展覽（如有開放）',drive:'車程約40分'},
+  {time:'15:20',name:'たけお温泉ぷりん（武雄温泉物産館）',type:'snack',icon:'🍮',coords:[33.19656,130.03251],duration:'20分',note:'武雄溫泉布丁 ~¥400\n佐賀甜點選舉2024 布丁類第1名\n營業至17:15',drive:'車程約5分'},
+  {time:'16:00',name:'うれしのSHUプリン',type:'snack',icon:'🍵',coords:[33.10110,129.99896],duration:'20分',note:'嬉野溫泉布丁 ¥300~¥400\n使用嬉野綠茶製作，研發3年',drive:'車程約25分'},
+  {time:'18:00',name:'鷹鮨（Taka Zushi）',type:'restaurant',icon:'🍣',coords:[33.09796,129.98412],duration:'90分',note:'已預約 18:00・壽司/海鮮\n僅7座位（含個室）\n冬季時令：ヒラメ（比目魚）、鯛\n¥5,000~¥5,999・Tabelog 3.17',phone:'0954-43-3210',tabelog:'https://tabelog.com/saga/A4104/A410401/41002823/',drive:'車程約5分'},
+  {time:'20:00',name:'Hotel Sakura 嬉野',type:'hotel',icon:'🏨',coords:[33.09747,129.98513],duration:'',note:'嬉野溫泉住宿（住2晚）',drive:'車程約3分'}
+],
+'2026-03-01':[
+  {time:'09:35',name:'嬉野温泉湯豆腐 早午餐',type:'restaurant',icon:'🫕',coords:[33.09796,129.98412],duration:'60分',note:'佐嘉平川屋 or 宗庵よこ長\n嬉野温泉水將豆腐溶成豆乳般\n全日本獨特・¥1,000~¥2,000'},
+  {time:'11:00',name:'豪斯登堡 Huis Ten Bosch',type:'spot',icon:'🎡',coords:[33.08547,129.78854],duration:'330分',note:'荷蘭風主題樂園\n全天遊玩',drive:'車程約50分'},
+  {time:'12:00',name:'園內午餐',type:'restaurant',icon:'🍽',coords:[33.08547,129.78854],duration:'60分',note:'豪斯登堡園內用餐'},
+  {time:'16:30',name:'離開豪斯登堡',type:'transport',icon:'🚗',coords:[33.08547,129.78854],duration:''},
+  {time:'18:00',name:'PIZZERIA MONTE STELLA',type:'restaurant',icon:'🍕',coords:[33.09752,129.98103],duration:'90分',note:'已預約 18:00・拿坡里窯烤披薩\n主廚赴義學藝\n¥3,000~¥3,999・Tabelog 3.08\n連吃3天日料後換口味',phone:'0954-20-2020',tabelog:'https://tabelog.com/saga/A4104/A410401/41006437/',drive:'車程約50分'},
+  {time:'20:00',name:'Hotel Sakura 嬉野（第2晚）',type:'hotel',icon:'🏨',coords:[33.09747,129.98513],duration:'',note:'嬉野溫泉住宿',drive:'車程約5分'}
+],
+'2026-03-02':[
+  {time:'09:30',name:'出發',type:'transport',icon:'🚗',coords:[33.09747,129.98513],duration:''},
+  {time:'09:45',name:'武雄・嬉野 童話村',type:'spot',icon:'🧚',coords:[33.12990,129.97640],duration:'75分',note:'兒童主題遊樂園',drive:'車程約15分'},
+  {time:'12:00',name:'川した（竹崎蟹料理）',type:'restaurant',icon:'🦀',coords:[32.99168,130.19091],duration:'90分',note:'已預約 12:00（午餐）\nかに釜飯セット ¥2,500\nかに御膳 ¥4,400~¥6,600\n3月=母蟹有內子（蟹卵）\n有活蟹水族箱、兒童餐',phone:'0954-68-2645',drive:'車程約40分'},
+  {time:'13:40',name:'大魚神社 海中鳥居',type:'spot',icon:'⛩️',coords:[33.03123,130.17775],duration:'30分',note:'有明海中的朱紅鳥居\n退潮時可步行靠近',drive:'車程約15分'},
+  {time:'14:25',name:'竹崎海産（炭烤牡蠣小屋）',type:'snack',icon:'🦪',coords:[33.03917,130.17136],duration:'60分',note:'炭烤竹崎牡蠣 ¥2,000~¥2,999\n2月=牡蠣最肥美\n平日營業至16:30',phone:'0954-67-0603',drive:'車程約5分'},
+  {time:'18:00',name:'寿し政（Sushi Masa）',type:'restaurant',icon:'🍣',coords:[33.08103,130.10901],duration:'90分',note:'已預約 18:00・有明海壽司\n¥2,000~¥2,999・Tabelog 3.36\n週一營業（重要！週四休）\n個室可、嬰兒車可',phone:'0954-62-5617',tabelog:'https://tabelog.com/saga/A4104/A410402/41001116/',drive:'車程約25分'},
+  {time:'20:00',name:'airbnb 鹿島',type:'hotel',icon:'🏨',coords:[33.1030,130.1020],duration:'',note:'鹿島市民宿',drive:'車程約10分'}
+],
+'2026-03-03':[
+  {time:'09:00',name:'出發前往機場（提早出門！）',type:'transport',icon:'🚗',coords:[33.1030,130.1020],duration:''},
+  {time:'09:40',name:'抵達佐賀機場',type:'airport',icon:'✈️',coords:[33.14972,130.30222],duration:'',note:'提前1.5小時到機場',drive:'車程約40分'},
+  {time:'11:25',name:'IT247 起飛',type:'airport',icon:'🛫',coords:[33.14972,130.30222],duration:'',note:'佐賀→桃園'},
+  {time:'13:05',name:'抵達桃園機場',type:'airport',icon:'🏠',coords:[25.0797,121.2342],duration:'',note:'到家！辛苦了～'}
+]};
+
+const foods=[
+  {name:'佐賀牛鐵板燒',jp:'佐賀牛ステーキ',day:'Day1',where:'季楽 本店',price:'¥8,000~¥14,999',rating:'5/5',desc:'日本頂級和牛之一，A5等級佐賀牛。鐵板現煎或涮涮鍋。油花入口即化。'},
+  {name:'活烏賊造り（一魚兩吃）',jp:'イカの活き造り定食',day:'Day2',where:'大和（呼子）',price:'¥3,000~¥3,999',rating:'5/5',desc:'呼子名物！透明活烏賊現切刺身，鰭再炸天婦羅。2-3月為ヤリイカ（槍烏賊）旺季。'},
+  {name:'唐津漢堡',jp:'からつバーガー',day:'Day2',where:'虹の松原路邊攤',price:'~¥500',rating:'5/5',desc:'虹の松原名物，路邊攤車販售的經典漢堡。'},
+  {name:'烏賊燒賣',jp:'いかしゅうまい',day:'Day2',where:'萬坊 呼子朝市通り店',price:'~¥500',rating:'5/5',desc:'呼子發祥！烏賊肉製成的燒賣，外酥內彈。'},
+  {name:'魚肉可樂餅',jp:'魚ロッケ',day:'Day2',where:'呼子街邊小攤',price:'~¥200',rating:'4/5',desc:'魚漿製成的可樂餅，炸得金黃酥脆。'},
+  {name:'武雄溫泉布丁',jp:'たけお温泉ぷりん',day:'Day3',where:'武雄温泉物産館',price:'~¥400',rating:'5/5',desc:'佐賀甜點選舉2024布丁類第1名！滑順濃郁。'},
+  {name:'嬉野綠茶布丁',jp:'うれしのSHUプリン',day:'Day3',where:'嬉野溫泉街',price:'¥300~¥400',rating:'4/5',desc:'使用嬉野綠茶製作，研發3年的抹茶布丁。'},
+  {name:'嬉野溫泉湯豆腐',jp:'嬉野温泉湯どうふ',day:'Day4',where:'佐嘉平川屋 / 宗庵よこ長',price:'¥1,000~¥2,000',rating:'5/5',desc:'全日本獨特！嬉野溫泉水將豆腐溶成絲滑豆乳狀。口感如奶油般滑順，早餐最推。'},
+  {name:'竹崎蟹釜飯',jp:'かに釜飯セット',day:'Day5',where:'川した',price:'¥2,500',rating:'5/5',desc:'用竹崎蟹肉現煮的釜飯。3月=母蟹季節，內子（蟹卵）特別豐富。'},
+  {name:'炭烤竹崎牡蠣',jp:'炭焼き竹崎カキ',day:'Day5',where:'竹崎海産',price:'¥2,000~¥2,999',rating:'5/5',desc:'2月是牡蠣最肥美的季節！在牡蠣小屋炭火現烤，鮮甜多汁。'},
+  {name:'有明海壽司',jp:'有明海の寿司',day:'Day5',where:'寿し政',price:'¥2,000~¥2,999',rating:'4/5',desc:'使用有明海當日新鮮漁獲的壽司，味道鮮美。'}
+];
+
+const reservations=[
+  {name:'佐賀牛レストラン季楽 本店',zh:'佐賀牛鐵板燒餐廳 季楽',date:'2/26 (四)',time:'18:00',phone:'0952-28-4132',tabelog:'https://tabelog.com/saga/A4101/A410101/41000012/',cuisine:'佐賀牛鐵板燒/涮涮鍋',price:'¥8,000~¥14,999',pax:'2大2小(3歲、1歲)',note:'禁菸・有個室\n百名店2024',coords:[33.26159,130.30333]},
+  {name:'いかの活造り 大和',zh:'活烏賊造り 大和',date:'2/27 (五)',time:'18:00',phone:'0955-82-3643',tabelog:'https://tabelog.com/saga/A4102/A410201/41000157/',cuisine:'活烏賊刺身/海鮮',price:'¥3,000~¥3,999',pax:'2大2小(3歲、1歲)',note:'禁菸・請先確認烏賊供應\n（天候/漁獲影響）',coords:[33.52847,129.87946]},
+  {name:'鷹鮨 (Taka Zushi)',zh:'鷹鮨',date:'2/28 (六)',time:'18:00',phone:'0954-43-3210',tabelog:'https://tabelog.com/saga/A4104/A410401/41002823/',cuisine:'壽司/海鮮',price:'¥5,000~¥5,999',pax:'2大2小(3歲、1歲)',note:'禁菸・榻榻米個室4人\n僅7座位・務必預約\n週三休',coords:[33.09796,129.98412]},
+  {name:'PIZZERIA MONTE STELLA',zh:'蒙特斯特拉窯烤披薩',date:'3/1 (日)',time:'18:00',phone:'0954-20-2020',tabelog:'https://tabelog.com/saga/A4104/A410401/41006437/',cuisine:'拿坡里窯烤披薩',price:'¥3,000~¥3,999',pax:'2大2小(3歲、1歲)',note:'禁菸・兒童可\n主廚赴義學藝',coords:[33.09752,129.98103]},
+  {name:'川した (Kawashita)',zh:'川下 竹崎蟹料理',date:'3/2 (一)',time:'12:00 午餐',phone:'0954-68-2645',tabelog:'',cuisine:'竹崎蟹料理',price:'¥2,500~¥6,600',pax:'2大2小(3歲、1歲)',note:'禁菸・有個室（3間）\n有兒童餐・11:00~19:00營業',coords:[32.99168,130.19091]},
+  {name:'寿し政 (Sushi Masa)',zh:'壽司政',date:'3/2 (一)',time:'18:00',phone:'0954-62-5617',tabelog:'https://tabelog.com/saga/A4104/A410402/41001116/',cuisine:'壽司/有明海海鮮',price:'¥2,000~¥2,999',pax:'2大2小(3歲、1歲)',note:'禁菸・個室可・嬰兒車可\n週一營業・週四休',coords:[33.08103,130.10901]}
+];
+
+// === STATE ===
+let currentDay=0, currentPage='itinerary-page', leafletMap=null, mapMarkers=[], mapLines=[];
+let resStatusMap=JSON.parse(localStorage.getItem('resStatus')||'{}');
+
+function gmapNavUrl(lat,lng){return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`}
+function gmapSearchUrl(lat,lng,name){return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}+佐賀`}
+
+// === INIT ===
+function init(){
+  const today=new Date().toISOString().slice(0,10);
+  const idx=TRIP_DATES.indexOf(today);
+  if(idx>=0) currentDay=idx;
+  renderDayChips(); renderItinerary(); renderFoodPage(); renderReservations(); setupTabs();
+  setTimeout(initMap,200);
+  updateCountdown(); setInterval(updateCountdown,60000);
+}
+
+// === DAY CHIPS ===
+function renderDayChips(){
+  const el=document.getElementById('dayChips');
+  el.innerHTML=TRIP_DATES.map((d,i)=>{
+    const dt=new Date(d+'T00:00:00+09:00');
+    const wd=['日','一','二','三','四','五','六'][dt.getDay()];
+    return `<button class="day-chip${i===currentDay?' active':''}" data-day="${i}">${DAY_SHORT[i]} ${dt.getMonth()+1}/${dt.getDate()}(${wd})</button>`;
+  }).join('');
+  el.querySelectorAll('.day-chip').forEach(b=>{
+    b.onclick=()=>{
+      currentDay=+b.dataset.day;
+      document.querySelectorAll('.day-chip').forEach(c=>c.classList.toggle('active',+c.dataset.day===currentDay));
+      renderItinerary(); renderMap();
+    };
+  });
+}
+
+// === MAP (Leaflet + Google Maps tiles) ===
+function initMap(){
+  if(leafletMap) return;
+  leafletMap=L.map('map-container',{zoomControl:false}).setView([33.25,130.1],9);
+  // Google Maps road tiles
+  L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',{
+    maxZoom:20,
+    attribution:'&copy; Google Maps'
+  }).addTo(leafletMap);
+  L.control.zoom({position:'bottomright'}).addTo(leafletMap);
+  renderMap();
+}
+
+function renderMap(){
+  if(!leafletMap) return;
+  mapMarkers.forEach(m=>leafletMap.removeLayer(m));
+  mapLines.forEach(l=>leafletMap.removeLayer(l));
+  mapMarkers=[];mapLines=[];
+  const date=TRIP_DATES[currentDay], allItems=itinerary[date]||[];
+  const items=allItems.filter(i=>i.coords&&i.coords[0]>30);
+  if(!items.length) return;
+  const colors={spot:'#4caf50',restaurant:'#ff9800',hotel:'#e91e63',snack:'#ffc107',airport:'#607d8b',transport:'#2196f3'};
+  const bounds=[];
+  items.forEach((item,idx)=>{
+    const origIdx=allItems.indexOf(item);
+    const color=colors[item.type]||'#999';
+    const numIcon=L.divIcon({html:`<div class="marker-num" style="background:${color}">${idx+1}</div>`,iconSize:[22,22],iconAnchor:[11,11],className:''});
+    const marker=L.marker([item.coords[0],item.coords[1]],{icon:numIcon}).addTo(leafletMap);
+    let ph=`<div class="popup-title">${item.icon} ${item.name}</div>`;
+    ph+=`<div>${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
+    if(item.note) ph+=`<div style="margin-top:3px;font-size:11px;color:#666;white-space:pre-line">${item.note.split('\n').slice(0,2).join('\n')}</div>`;
+    ph+=`<a class="popup-nav-btn" href="${gmapNavUrl(item.coords[0],item.coords[1])}" target="_blank">📍 Google Maps 導航</a>`;
+    if(item.phone) ph+=` <a class="popup-call-btn" href="tel:${item.phone}">📞 撥打</a>`;
+    marker.bindPopup(ph,{maxWidth:260});
+    marker.on('click',()=>highlightCard(origIdx));
+    mapMarkers.push(marker);
+    bounds.push([item.coords[0],item.coords[1]]);
+  });
+  if(bounds.length>1){
+    const line=L.polyline(bounds,{color:'#e91e63',weight:2.5,opacity:.4,dashArray:'6 4'}).addTo(leafletMap);
+    mapLines.push(line);
+  }
+  leafletMap.fitBounds(bounds,{padding:[30,30]});
+}
+
+function highlightCard(idx){
+  document.querySelectorAll('.card').forEach(c=>c.classList.remove('highlight'));
+  const card=document.getElementById('card-'+idx);
+  if(card){
+    card.classList.add('highlight');
+    card.scrollIntoView({behavior:'smooth',block:'center'});
+    const d=document.getElementById('detail-'+idx);
+    if(d&&!d.classList.contains('open')) d.classList.add('open');
+    setTimeout(()=>card.classList.remove('highlight'),3000);
+  }
+}
+function focusMap(lat,lng){
+  if(!leafletMap) return;
+  leafletMap.setView([lat,lng],14,{animate:true});
+  const items=(itinerary[TRIP_DATES[currentDay]]||[]).filter(i=>i.coords&&i.coords[0]>30);
+  const mi=items.findIndex(i=>i.coords[0]===lat&&i.coords[1]===lng);
+  if(mi>=0&&mapMarkers[mi]) mapMarkers[mi].openPopup();
+}
+
+// === ITINERARY CARDS ===
+function renderItinerary(){
+  const date=TRIP_DATES[currentDay],items=itinerary[date]||[],panel=document.getElementById('cards-panel');
+  const now=getNowJST(),isToday=now.dateStr===date;
+  let html='';
+  if(isToday){
+    html+=`<div id="nowIndicator" class="now-indicator" style="display:none"></div>`;
+    html+=`<div id="countdownBar" class="countdown-bar" style="display:none"></div>`;
+  }
+  html+=`<div class="section-title">${DAY_LABELS[currentDay]} — ${DAY_REGIONS[currentDay]}</div>`;
+  items.forEach((item,idx)=>{
+    const isNow=isToday&&isCurrentItem(items,idx,now.timeMin);
+    html+=item.drive?`<div class="drive-info">🚗 ${item.drive}</div>`:'';
+    html+=`<div class="card${isNow?' now':''}" id="card-${idx}"><div class="card-main" onclick="onCardClick(${idx})">`;
+    html+=`<div class="card-time">${item.time}</div><div class="card-icon ${item.type}">${item.icon}</div>`;
+    html+=`<div class="card-info"><div class="card-name">${item.name}</div>`;
+    html+=`<div class="card-sub">${item.duration?'⏱'+item.duration:''}${item.duration&&item.type?' · ':''}${getTypeLabel(item.type)}</div></div>`;
+    html+=`<div class="card-arrow">›</div></div>`;
+    if(item.note||item.phone||item.tabelog||item.coords){
+      html+=`<div class="card-detail" id="detail-${idx}">`;
+      if(item.note) html+=`<div style="white-space:pre-line;font-size:12px;color:var(--text2);padding:4px 0;line-height:1.6">${item.note}</div>`;
+      html+=`<div class="card-actions">`;
+      if(item.coords&&item.coords[0]>30) html+=`<a class="btn btn-nav" href="${gmapNavUrl(item.coords[0],item.coords[1])}" target="_blank" onclick="event.stopPropagation()">📍 Google Maps</a>`;
+      if(item.phone) html+=`<a class="btn btn-call" href="tel:${item.phone}" onclick="event.stopPropagation()">📞 ${item.phone}</a>`;
+      if(item.tabelog) html+=`<a class="btn btn-link" href="${item.tabelog}" target="_blank" onclick="event.stopPropagation()">⭐ Tabelog</a>`;
+      html+=`</div></div>`;
+    }
+    html+=`</div>`;
+  });
+  panel.innerHTML=html;
+  if(isToday){updateCountdown();const nc=panel.querySelector('.card.now');if(nc) setTimeout(()=>nc.scrollIntoView({behavior:'smooth',block:'center'}),300);}
+}
+function onCardClick(idx){
+  const d=document.getElementById('detail-'+idx);
+  if(d) d.classList.toggle('open');
+  const item=(itinerary[TRIP_DATES[currentDay]]||[])[idx];
+  if(item&&item.coords&&item.coords[0]>30) focusMap(item.coords[0],item.coords[1]);
+}
+function getTypeLabel(t){return{spot:'景點',restaurant:'餐廳',hotel:'住宿',transport:'交通',snack:'小吃',airport:'機場'}[t]||''}
+function getNowJST(){const n=new Date(),j=new Date(n.getTime()+(n.getTimezoneOffset()+540)*60000);return{dateStr:j.toISOString().slice(0,10),timeMin:j.getHours()*60+j.getMinutes()}}
+function parseTime(t){const[h,m]=t.split(':').map(Number);return h*60+m}
+function isCurrentItem(items,idx,nowMin){const s=parseTime(items[idx].time),e=idx<items.length-1?parseTime(items[idx+1].time):s+120;return nowMin>=s&&nowMin<e}
+
+// === COUNTDOWN ===
+function updateCountdown(){
+  const bar=document.getElementById('countdownBar'),ind=document.getElementById('nowIndicator');
+  if(!bar||!ind) return;
+  const now=getNowJST(),date=TRIP_DATES[currentDay],items=itinerary[date]||[];
+  if(now.dateStr!==date){bar.style.display='none';ind.style.display='none';return}
+  let ci=-1;for(let i=items.length-1;i>=0;i--)if(now.timeMin>=parseTime(items[i].time)){ci=i;break}
+  if(ci>=0){ind.style.display='block';ind.innerHTML=`📍 目前：${items[ci].name}`}
+  if(ci>=0&&ci<items.length-1){const nx=items[ci+1],diff=parseTime(nx.time)-now.timeMin;if(diff>0&&diff<=180){bar.style.display='flex';bar.innerHTML=`⏳ 下一站 <b>${nx.name}</b>　${diff}分鐘後 (${nx.time})`}else bar.style.display='none'}else bar.style.display='none';
+}
+
+// === FOOD PAGE ===
+function renderFoodPage(){
+  const s=document.getElementById('foodScroll');
+  let h='<div class="section-title">佐賀特色美食 — 日文名可直接給店員看</div>';
+  foods.forEach(f=>{
+    h+=`<div class="food-card"><div class="food-name">${f.name}</div><div class="food-jp">🇯🇵 ${f.jp}</div>`;
+    h+=`<div class="food-desc">${f.desc}</div><div><span class="food-tag day">${f.day}</span><span class="food-tag price">${f.price}</span><span class="food-tag rating">推薦 ${f.rating}</span></div>`;
+    h+=`<div style="font-size:11px;color:var(--text2);margin-top:4px">📍 ${f.where}</div></div>`;
+  });
+  h+='<div class="section-title">🐟 季節海鮮指南</div>';
+  h+='<div class="food-card"><div class="food-name">2/27 唐津・呼子 烏賊季</div><div class="food-desc" style="line-height:1.8">🦑 <b>ヤリイカ</b>（槍烏賊）— 1~3月旺季，透明脆彈<br>🦑 <b>アオリイカ</b>（冬烏賊）— 11~3月限定，厚實甘甜<br>🦑 <b>コウイカ</b>（墨烏賊）— 2~4月，最甜</div></div>';
+  h+='<div class="food-card"><div class="food-name">3/2 太良・鹿島 有明海</div><div class="food-desc" style="line-height:1.8">🦪 <b>竹崎牡蠣</b> — 11~3月（2月最肥）大顆鮮甜<br>🦀 <b>竹崎蟹 メスガニ</b>（母蟹）— 3月有內子（蟹卵）<br>🐟 <b>ムツゴロウ</b>（彈塗魚）— 有明海特產，蒲燒風味</div></div>';
+  s.innerHTML=h;
+}
+
+// === RESERVATIONS ===
+function renderReservations(){
+  const s=document.getElementById('resScroll');
+  let h='<div class="section-title">預約人：Wu Tsung Hsuan ・ +886-981053092</div>';
+  reservations.forEach((r,i)=>{
+    const cf=resStatusMap[i];
+    h+=`<div class="res-card"><div class="res-header"><div><div class="res-name">${r.zh||r.name}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${r.name}</div></div>`;
+    h+=`<div class="res-date">${r.date} ${r.time}</div></div>`;
+    h+=`<div class="res-info">🍽 ${r.cuisine}<br>💰 ${r.price}<br>👥 ${r.pax}<br>📝 ${r.note.replace(/\n/g,'<br>')}</div>`;
+    h+=`<div class="res-actions"><a class="btn btn-call" href="tel:${r.phone}">📞 ${r.phone}</a>`;
+    if(r.coords) h+=`<a class="btn btn-nav" href="${gmapNavUrl(r.coords[0],r.coords[1])}" target="_blank">📍 導航</a>`;
+    if(r.tabelog) h+=`<a class="btn btn-link" href="${r.tabelog}" target="_blank">⭐ Tabelog</a>`;
+    h+=`<button class="res-status${cf?' confirmed':''}" onclick="toggleResStatus(${i},this)">${cf?'✅ 已確認':'⬜ 待確認'}</button></div></div>`;
+  });
+  s.innerHTML=h;
+}
+function toggleResStatus(i,b){resStatusMap[i]=!resStatusMap[i];localStorage.setItem('resStatus',JSON.stringify(resStatusMap));b.classList.toggle('confirmed');b.textContent=resStatusMap[i]?'✅ 已確認':'⬜ 待確認'}
+
+// === TABS ===
+function setupTabs(){
+  document.querySelectorAll('.tab-item').forEach(tab=>{
+    tab.onclick=()=>{
+      const page=tab.dataset.page;if(page===currentPage) return;
+      currentPage=page;
+      document.querySelectorAll('.tab-item').forEach(t=>t.classList.toggle('active',t===tab));
+      document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===page));
+      if(page==='itinerary-page'&&leafletMap) setTimeout(()=>{leafletMap.invalidateSize();renderMap()},100);
+    };
+  });
+}
+
+// === SERVICE WORKER + MANIFEST ===
+if('serviceWorker' in navigator){
+  const sw=`const C='saga-v4';const U=['./','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(U)).then(()=>self.skipWaiting())));self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{if(res.ok){const c=res.clone();caches.open(C).then(cache=>cache.put(e.request,c));}return res}).catch(()=>new Response('離線中',{headers:{'Content-Type':'text/plain'}})))));`;
+  navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'}))).catch(()=>{});
+}
+const mf={name:'2026 佐賀旅行',short_name:'佐賀旅行',start_url:'.',display:'standalone',background_color:'#f5f5f5',theme_color:'#e91e63',icons:[{src:'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjZTkxZTYzIi8+PHRleHQgeD0iOTAiIHk9IjEwNSIgZm9udC1zaXplPSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiPuS9kOizgDwvdGV4dD48dGV4dCB4PSI5MCIgeT0iMTQ1IiBmb250LXNpemU9IjMwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZjY2JjIj7ml4XooYwgMjAyNjwvdGV4dD48L3N2Zz4=',sizes:'180x180',type:'image/svg+xml'}]};
+const ml=document.createElement('link');ml.rel='manifest';ml.href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/json'}));document.head.appendChild(ml);
+
+init();
+</script>
+</body>
+</html>
