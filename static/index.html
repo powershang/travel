@@ -39,7 +39,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .tab-item.active{color:var(--pink)}
 .tab-item .icon{font-size:22px}
 
-.content{position:fixed;top:0;left:0;right:0;bottom:calc(var(--tab-h)+var(--safe-bottom));overflow:hidden}
+.content{position:fixed;top:0;left:0;right:0;height:calc(100dvh - var(--tab-h) - var(--safe-bottom));overflow:hidden}
 .page{display:none;height:100%}
 .page.active{display:flex;flex-direction:column;overflow:hidden}
 .page-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 12px 20px;min-height:0}
@@ -50,11 +50,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 #map-panel{flex:1;position:relative}
 #map-container{width:100%;height:100%}
 
+/* Food page left-right layout */
+#food-page .food-body{flex:1;display:flex;flex-direction:row;overflow:hidden}
+#food-cards-panel{width:45%;min-width:180px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 10px 20px;border-right:1px solid #e0e0e0;background:var(--bg)}
+#food-map-panel{flex:1;position:relative}
+#food-map-container{width:100%;height:100%}
+
 /* Portrait phone: stack top=map, bottom=cards */
 @media(max-width:540px) and (orientation:portrait){
   #itinerary-page .itin-body{flex-direction:column}
   #cards-panel{width:100%;order:2;flex:1;border-right:none;border-top:2px solid var(--pink-light)}
   #map-panel{order:1;height:35vh;flex:none}
+  #food-page .food-body{flex-direction:column}
+  #food-cards-panel{width:100%;order:2;flex:1;border-right:none;border-top:2px solid var(--pink-light)}
+  #food-map-panel{order:1;height:35vh;flex:none}
 }
 
 .now-indicator{background:var(--pink-light);border-left:3px solid var(--pink);padding:7px 10px;margin-bottom:8px;border-radius:8px;font-size:12px;font-weight:500;color:var(--pink-dark)}
@@ -86,8 +95,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .popup-nav-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:#4285f4;color:#fff;border-radius:6px;text-decoration:none;font-size:11px}
 .popup-call-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:#2e7d32;color:#fff;border-radius:6px;text-decoration:none;font-size:11px}
 .marker-num{width:22px;height:22px;line-height:22px;text-align:center;font-size:11px;font-weight:700;border-radius:50%;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.marker-label{white-space:nowrap;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.3);line-height:1.3}
 
 .food-card{background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.food-card.highlight{box-shadow:0 0 0 2px #2196f3,0 2px 8px rgba(33,150,243,.3)}
 .food-card .food-name{font-size:15px;font-weight:600}
 .food-card .food-jp{font-size:15px;margin-top:4px;background:#f5f5f5;padding:6px 10px;border-radius:8px;font-weight:500}
 .food-card .food-desc{font-size:13px;margin-top:8px;line-height:1.5}
@@ -116,7 +127,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
   </div>
   <div id="food-page" class="page">
     <div class="header"><div><h1>美食指南</h1><div class="subtitle">當地特色美食 日文+中文 給店員看</div></div></div>
-    <div class="page-scroll" id="foodScroll"></div>
+    <div class="food-body">
+      <div id="food-cards-panel"></div>
+      <div id="food-map-panel"><div id="food-map-container"></div></div>
+    </div>
   </div>
   <div id="res-page" class="page">
     <div class="header"><div><h1>餐廳預約</h1><div class="subtitle">6 間餐廳預約資訊</div></div></div>
@@ -192,17 +206,17 @@ const itinerary={
 ]};
 
 const foods=[
-  {name:'佐賀牛鐵板燒',jp:'佐賀牛ステーキ',day:'Day1',where:'季楽 本店',price:'¥8,000~¥14,999',rating:'5/5',desc:'日本頂級和牛之一，A5等級佐賀牛。鐵板現煎或涮涮鍋。油花入口即化。'},
-  {name:'活烏賊造り（一魚兩吃）',jp:'イカの活き造り定食',day:'Day2',where:'大和（呼子）',price:'¥3,000~¥3,999',rating:'5/5',desc:'呼子名物！透明活烏賊現切刺身，鰭再炸天婦羅。2-3月為ヤリイカ（槍烏賊）旺季。'},
-  {name:'唐津漢堡',jp:'からつバーガー',day:'Day2',where:'虹の松原路邊攤',price:'~¥500',rating:'5/5',desc:'虹の松原名物，路邊攤車販售的經典漢堡。'},
-  {name:'烏賊燒賣',jp:'いかしゅうまい',day:'Day2',where:'萬坊 呼子朝市通り店',price:'~¥500',rating:'5/5',desc:'呼子發祥！烏賊肉製成的燒賣，外酥內彈。'},
-  {name:'魚肉可樂餅',jp:'魚ロッケ',day:'Day2',where:'呼子街邊小攤',price:'~¥200',rating:'4/5',desc:'魚漿製成的可樂餅，炸得金黃酥脆。'},
-  {name:'武雄溫泉布丁',jp:'たけお温泉ぷりん',day:'Day3',where:'武雄温泉物産館',price:'~¥400',rating:'5/5',desc:'佐賀甜點選舉2024布丁類第1名！滑順濃郁。'},
-  {name:'嬉野綠茶布丁',jp:'うれしのSHUプリン',day:'Day3',where:'嬉野溫泉街',price:'¥300~¥400',rating:'4/5',desc:'使用嬉野綠茶製作，研發3年的抹茶布丁。'},
-  {name:'嬉野溫泉湯豆腐',jp:'嬉野温泉湯どうふ',day:'Day4',where:'佐嘉平川屋 / 宗庵よこ長',price:'¥1,000~¥2,000',rating:'5/5',desc:'全日本獨特！嬉野溫泉水將豆腐溶成絲滑豆乳狀。口感如奶油般滑順，早餐最推。'},
-  {name:'竹崎蟹釜飯',jp:'かに釜飯セット',day:'Day5',where:'川した',price:'¥2,500',rating:'5/5',desc:'用竹崎蟹肉現煮的釜飯。3月=母蟹季節，內子（蟹卵）特別豐富。'},
-  {name:'炭烤竹崎牡蠣',jp:'炭焼き竹崎カキ',day:'Day5',where:'竹崎海産',price:'¥2,000~¥2,999',rating:'5/5',desc:'2月是牡蠣最肥美的季節！在牡蠣小屋炭火現烤，鮮甜多汁。'},
-  {name:'有明海壽司',jp:'有明海の寿司',day:'Day5',where:'寿し政',price:'¥2,000~¥2,999',rating:'4/5',desc:'使用有明海當日新鮮漁獲的壽司，味道鮮美。'}
+  {name:'佐賀牛鐵板燒',jp:'佐賀牛ステーキ',day:'Day1',where:'季楽 本店',price:'¥8,000~¥14,999',rating:'5/5',desc:'日本頂級和牛之一，A5等級佐賀牛。鐵板現煎或涮涮鍋。油花入口即化。',coords:[33.26159,130.30333],gmap:'佐賀牛レストラン季楽 本店'},
+  {name:'活烏賊造り（一魚兩吃）',jp:'イカの活き造り定食',day:'Day2',where:'大和（呼子）',price:'¥3,000~¥3,999',rating:'5/5',desc:'呼子名物！透明活烏賊現切刺身，鰭再炸天婦羅。2-3月為ヤリイカ（槍烏賊）旺季。',coords:[33.52847,129.87946],gmap:'いかの活造り 大和 呼子'},
+  {name:'唐津漢堡',jp:'からつバーガー',day:'Day2',where:'虹の松原路邊攤',price:'~¥500',rating:'5/5',desc:'虹の松原名物，路邊攤車販售的經典漢堡。',coords:[33.44427,129.99984],gmap:'からつバーガー 虹の松原'},
+  {name:'烏賊燒賣',jp:'いかしゅうまい',day:'Day2',where:'萬坊 呼子朝市通り店',price:'~¥500',rating:'5/5',desc:'呼子發祥！烏賊肉製成的燒賣，外酥內彈。',coords:[33.53709,129.89473],gmap:'萬坊 呼子朝市通り店'},
+  {name:'魚肉可樂餅',jp:'魚ロッケ',day:'Day2',where:'呼子街邊小攤',price:'~¥200',rating:'4/5',desc:'魚漿製成的可樂餅，炸得金黃酥脆。',coords:[33.53709,129.89473],gmap:'魚ロッケ 呼子'},
+  {name:'武雄溫泉布丁',jp:'たけお温泉ぷりん',day:'Day3',where:'武雄温泉物産館',price:'~¥400',rating:'5/5',desc:'佐賀甜點選舉2024布丁類第1名！滑順濃郁。',coords:[33.19656,130.03251],gmap:'武雄温泉物産館'},
+  {name:'嬉野綠茶布丁',jp:'うれしのSHUプリン',day:'Day3',where:'嬉野溫泉街',price:'¥300~¥400',rating:'4/5',desc:'使用嬉野綠茶製作，研發3年的抹茶布丁。',coords:[33.10110,129.99896],gmap:'うれしのSHUプリン 嬉野'},
+  {name:'嬉野溫泉湯豆腐',jp:'嬉野温泉湯どうふ',day:'Day4',where:'佐嘉平川屋 / 宗庵よこ長',price:'¥1,000~¥2,000',rating:'5/5',desc:'全日本獨特！嬉野溫泉水將豆腐溶成絲滑豆乳狀。口感如奶油般滑順，早餐最推。',coords:[33.09796,129.98412],gmap:'佐嘉平川屋 嬉野温泉'},
+  {name:'竹崎蟹釜飯',jp:'かに釜飯セット',day:'Day5',where:'川した',price:'¥2,500',rating:'5/5',desc:'用竹崎蟹肉現煮的釜飯。3月=母蟹季節，內子（蟹卵）特別豐富。',coords:[32.99168,130.19091],gmap:'川した 太良'},
+  {name:'炭烤竹崎牡蠣',jp:'炭焼き竹崎カキ',day:'Day5',where:'竹崎海産',price:'¥2,000~¥2,999',rating:'5/5',desc:'2月是牡蠣最肥美的季節！在牡蠣小屋炭火現烤，鮮甜多汁。',coords:[33.03917,130.17136],gmap:'竹崎海産'},
+  {name:'有明海壽司',jp:'有明海の寿司',day:'Day5',where:'寿し政',price:'¥2,000~¥2,999',rating:'4/5',desc:'使用有明海當日新鮮漁獲的壽司，味道鮮美。',coords:[33.08103,130.10901],gmap:'寿し政 鹿島'}
 ];
 
 const reservations=[
@@ -216,10 +230,11 @@ const reservations=[
 
 // === STATE ===
 let currentDay=0, currentPage='itinerary-page', leafletMap=null, mapMarkers=[], mapLines=[];
+let foodMap=null, foodMarkers=[];
 let resStatusMap=JSON.parse(localStorage.getItem('resStatus')||'{}');
 
 function gmapNavUrl(lat,lng){return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`}
-function gmapSearchUrl(lat,lng,name){return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}+佐賀`}
+function gmapSearchUrl(name){return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`}
 
 // === INIT ===
 function init(){
@@ -274,12 +289,12 @@ function renderMap(){
   items.forEach((item,idx)=>{
     const origIdx=allItems.indexOf(item);
     const color=colors[item.type]||'#999';
-    const numIcon=L.divIcon({html:`<div class="marker-num" style="background:${color}">${idx+1}</div>`,iconSize:[22,22],iconAnchor:[11,11],className:''});
-    const marker=L.marker([item.coords[0],item.coords[1]],{icon:numIcon}).addTo(leafletMap);
+    const labelIcon=L.divIcon({html:`<div class="marker-label" style="background:${color}">${idx+1}. ${item.icon} ${item.name}</div>`,iconSize:[null,null],iconAnchor:[12,14],className:''});
+    const marker=L.marker([item.coords[0],item.coords[1]],{icon:labelIcon}).addTo(leafletMap);
     let ph=`<div class="popup-title">${item.icon} ${item.name}</div>`;
     ph+=`<div>${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
     if(item.note) ph+=`<div style="margin-top:3px;font-size:11px;color:#666;white-space:pre-line">${item.note.split('\n').slice(0,2).join('\n')}</div>`;
-    ph+=`<a class="popup-nav-btn" href="${gmapNavUrl(item.coords[0],item.coords[1])}" target="_blank">📍 Google Maps 導航</a>`;
+    ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.name)}" target="_blank">📍 Google Maps</a>`;
     if(item.phone) ph+=` <a class="popup-call-btn" href="tel:${item.phone}">📞 撥打</a>`;
     marker.bindPopup(ph,{maxWidth:260});
     marker.on('click',()=>highlightCard(origIdx));
@@ -322,19 +337,23 @@ function renderItinerary(){
     html+=`<div id="countdownBar" class="countdown-bar" style="display:none"></div>`;
   }
   html+=`<div class="section-title">${DAY_LABELS[currentDay]} — ${DAY_REGIONS[currentDay]}</div>`;
+  let mapIdx=0;
   items.forEach((item,idx)=>{
+    const hasMap=item.coords&&item.coords[0]>30;
+    if(hasMap) mapIdx++;
     const isNow=isToday&&isCurrentItem(items,idx,now.timeMin);
     html+=item.drive?`<div class="drive-info">🚗 ${item.drive}</div>`:'';
     html+=`<div class="card${isNow?' now':''}" id="card-${idx}"><div class="card-main" onclick="onCardClick(${idx})">`;
     html+=`<div class="card-time">${item.time}</div><div class="card-icon ${item.type}">${item.icon}</div>`;
-    html+=`<div class="card-info"><div class="card-name">${item.name}</div>`;
+    const numTag=hasMap?`<span style="color:var(--text2);font-size:11px;margin-right:4px">${mapIdx}.</span>`:'';
+    html+=`<div class="card-info"><div class="card-name">${numTag}${item.name}</div>`;
     html+=`<div class="card-sub">${item.duration?'⏱'+item.duration:''}${item.duration&&item.type?' · ':''}${getTypeLabel(item.type)}</div></div>`;
     html+=`<div class="card-arrow">›</div></div>`;
     if(item.note||item.phone||item.tabelog||item.coords){
       html+=`<div class="card-detail" id="detail-${idx}">`;
       if(item.note) html+=`<div style="white-space:pre-line;font-size:12px;color:var(--text2);padding:4px 0;line-height:1.6">${item.note}</div>`;
       html+=`<div class="card-actions">`;
-      if(item.coords&&item.coords[0]>30) html+=`<a class="btn btn-nav" href="${gmapNavUrl(item.coords[0],item.coords[1])}" target="_blank" onclick="event.stopPropagation()">📍 Google Maps</a>`;
+      if(item.coords&&item.coords[0]>30) html+=`<a class="btn btn-nav" href="${gmapSearchUrl(item.name)}" target="_blank" onclick="event.stopPropagation()">📍 Google Maps</a>`;
       if(item.phone) html+=`<a class="btn btn-call" href="tel:${item.phone}" onclick="event.stopPropagation()">📞 ${item.phone}</a>`;
       if(item.tabelog) html+=`<a class="btn btn-link" href="${item.tabelog}" target="_blank" onclick="event.stopPropagation()">⭐ Tabelog</a>`;
       html+=`</div></div>`;
@@ -368,17 +387,60 @@ function updateCountdown(){
 
 // === FOOD PAGE ===
 function renderFoodPage(){
-  const s=document.getElementById('foodScroll');
+  const s=document.getElementById('food-cards-panel');
   let h='<div class="section-title">佐賀特色美食 — 日文名可直接給店員看</div>';
-  foods.forEach(f=>{
-    h+=`<div class="food-card"><div class="food-name">${f.name}</div><div class="food-jp">🇯🇵 ${f.jp}</div>`;
+  foods.forEach((f,i)=>{
+    h+=`<div class="food-card" id="food-card-${i}" onclick="onFoodCardClick(${i})" style="cursor:pointer"><div class="food-name">${f.name}</div><div class="food-jp">🇯🇵 ${f.jp}</div>`;
     h+=`<div class="food-desc">${f.desc}</div><div><span class="food-tag day">${f.day}</span><span class="food-tag price">${f.price}</span><span class="food-tag rating">推薦 ${f.rating}</span></div>`;
-    h+=`<div style="font-size:11px;color:var(--text2);margin-top:4px">📍 ${f.where}</div></div>`;
+    h+=`<div style="font-size:11px;color:var(--text2);margin-top:4px">📍 ${f.where}`;
+    if(f.coords) h+=` <a class="btn btn-nav" href="${gmapSearchUrl(f.gmap||f.name)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:4px">📍 Google Maps</a>`;
+    h+=`</div></div>`;
   });
   h+='<div class="section-title">🐟 季節海鮮指南</div>';
   h+='<div class="food-card"><div class="food-name">2/27 唐津・呼子 烏賊季</div><div class="food-desc" style="line-height:1.8">🦑 <b>ヤリイカ</b>（槍烏賊）— 1~3月旺季，透明脆彈<br>🦑 <b>アオリイカ</b>（冬烏賊）— 11~3月限定，厚實甘甜<br>🦑 <b>コウイカ</b>（墨烏賊）— 2~4月，最甜</div></div>';
   h+='<div class="food-card"><div class="food-name">3/2 太良・鹿島 有明海</div><div class="food-desc" style="line-height:1.8">🦪 <b>竹崎牡蠣</b> — 11~3月（2月最肥）大顆鮮甜<br>🦀 <b>竹崎蟹 メスガニ</b>（母蟹）— 3月有內子（蟹卵）<br>🐟 <b>ムツゴロウ</b>（彈塗魚）— 有明海特產，蒲燒風味</div></div>';
   s.innerHTML=h;
+}
+
+function initFoodMap(){
+  if(foodMap) return;
+  foodMap=L.map('food-map-container',{zoomControl:false}).setView([33.25,130.1],9);
+  L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',{maxZoom:20,attribution:'&copy; Google Maps'}).addTo(foodMap);
+  L.control.zoom({position:'bottomright'}).addTo(foodMap);
+  const colors={Day1:'#e91e63',Day2:'#ff9800',Day3:'#4caf50',Day4:'#2196f3',Day5:'#9c27b0'};
+  const bounds=[];
+  foods.forEach((f,i)=>{
+    if(!f.coords) return;
+    const color=colors[f.day]||'#999';
+    const numIcon=L.divIcon({html:`<div class="marker-num" style="background:${color}">${i+1}</div>`,iconSize:[22,22],iconAnchor:[11,11],className:''});
+    const marker=L.marker([f.coords[0],f.coords[1]],{icon:numIcon}).addTo(foodMap);
+    let ph=`<div class="popup-title">🍽 ${f.name}</div>`;
+    ph+=`<div>${f.day} ・ ${f.where}</div>`;
+    ph+=`<div style="margin-top:3px;font-size:11px;color:#666">${f.jp}</div>`;
+    ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(f.gmap||f.name)}" target="_blank">📍 Google Maps</a>`;
+    marker.bindPopup(ph,{maxWidth:260});
+    marker.on('click',()=>highlightFoodCard(i));
+    foodMarkers.push(marker);
+    bounds.push([f.coords[0],f.coords[1]]);
+  });
+  if(bounds.length) foodMap.fitBounds(bounds,{padding:[30,30]});
+}
+
+function onFoodCardClick(idx){
+  const f=foods[idx];
+  if(!f||!f.coords||!foodMap) return;
+  foodMap.setView([f.coords[0],f.coords[1]],14,{animate:true});
+  if(foodMarkers[idx]) foodMarkers[idx].openPopup();
+}
+
+function highlightFoodCard(idx){
+  document.querySelectorAll('#food-cards-panel .food-card').forEach(c=>c.classList.remove('highlight'));
+  const card=document.getElementById('food-card-'+idx);
+  if(card){
+    card.classList.add('highlight');
+    card.scrollIntoView({behavior:'smooth',block:'center'});
+    setTimeout(()=>card.classList.remove('highlight'),3000);
+  }
 }
 
 // === RESERVATIONS ===
@@ -391,7 +453,7 @@ function renderReservations(){
     h+=`<div class="res-date">${r.date} ${r.time}</div></div>`;
     h+=`<div class="res-info">🍽 ${r.cuisine}<br>💰 ${r.price}<br>👥 ${r.pax}<br>📝 ${r.note.replace(/\n/g,'<br>')}</div>`;
     h+=`<div class="res-actions"><a class="btn btn-call" href="tel:${r.phone}">📞 ${r.phone}</a>`;
-    if(r.coords) h+=`<a class="btn btn-nav" href="${gmapNavUrl(r.coords[0],r.coords[1])}" target="_blank">📍 導航</a>`;
+    if(r.coords) h+=`<a class="btn btn-nav" href="${gmapSearchUrl(r.name)}" target="_blank">📍 Google Maps</a>`;
     if(r.tabelog) h+=`<a class="btn btn-link" href="${r.tabelog}" target="_blank">⭐ Tabelog</a>`;
     h+=`<button class="res-status${cf?' confirmed':''}" onclick="toggleResStatus(${i},this)">${cf?'✅ 已確認':'⬜ 待確認'}</button></div></div>`;
   });
@@ -408,6 +470,7 @@ function setupTabs(){
       document.querySelectorAll('.tab-item').forEach(t=>t.classList.toggle('active',t===tab));
       document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===page));
       if(page==='itinerary-page'&&leafletMap) setTimeout(()=>{leafletMap.invalidateSize();renderMap()},100);
+      if(page==='food-page') setTimeout(()=>{if(!foodMap) initFoodMap(); else foodMap.invalidateSize();},100);
     };
   });
 }
