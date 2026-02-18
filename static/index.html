@@ -238,7 +238,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     <div class="header">
       <div><h1>2026 佐賀旅行</h1><div class="subtitle">2/26 (四) ~ 3/3 (二) ・ 6天5夜 ｜ <span id="activePlanLabel" style="cursor:pointer;text-decoration:underline;opacity:1" onclick="openPlanModal()"></span></div></div>
       <div class="header-btns">
-        <button class="header-btn" id="btnAiReview" onclick="aiReview()" title="AI 審查" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">🤖 AI審查</button>
+        <!-- AI審查按鈕暫時隱藏 -->
+        <button class="header-btn" id="btnAiReview" onclick="aiReview()" title="AI 審查" style="display:none;font-size:12px;width:auto;padding:0 10px;border-radius:17px">🤖 AI審查</button>
         <button class="header-btn" onclick="exportItinerary()" title="匯出行程" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📥 匯出</button>
         <button class="header-btn" onclick="openImportModal()" title="匯入行程" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📤 匯入</button>
         <button class="header-btn" id="btnPlans" onclick="openPlanModal()" title="行程方案" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📋 方案</button>
@@ -1467,28 +1468,40 @@ function aiReview(){
   }
   overlay.classList.add('open');
   const body=document.getElementById('aiReviewBody');
+  body.innerHTML=`<div style="padding:4px 0"><textarea id="aiReviewPrompt" rows="3" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:14px;resize:vertical;font-family:inherit" placeholder="請幫我全面審查行程並給建議（可自訂，例如：幫我把第三天行程改輕鬆一點）"></textarea><button onclick="doAiReview()" style="margin-top:8px;padding:10px 24px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600">🚀 開始審查</button></div>`;
+}
+function doAiReview(){
+  const body=document.getElementById('aiReviewBody');
+  const userPrompt=(document.getElementById('aiReviewPrompt').value||'').trim();
   body.innerHTML='<div class="ai-spinner"><div class="spin"></div><div>AI 正在分析行程，請稍候...</div></div>';
-  // Collect itinerary text
   const plan=getActivePlan();
-  const data=plan.data;
-  let text='';
-  TRIP_DATES.forEach((date,i)=>{
-    const items=data[date]||[];
-    if(!items.length)return;
-    text+=`\n## ${DAY_SHORT[i]} ${date}\n`;
-    items.forEach(it=>{
-      text+=`- ${it.time||''} ${it.name}`;
-      if(it.duration) text+=` (${it.duration})`;
-      if(it.drive) text+=` [${it.drive}]`;
-      if(it.note) text+=` — ${it.note}`;
-      text+='\n';
-    });
-  });
-  fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itinerary:text})})
+  const itineraryJson=plan.data;
+  window._aiSuggestedData=null;
+  fetch('/api/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({user_prompt:userPrompt,itinerary_json:itineraryJson})})
     .then(r=>r.json()).then(res=>{
       if(res.error){body.innerHTML=`<div style="color:#c62828;padding:20px">❌ ${res.error}</div>`;return}
-      body.innerHTML=simpleMarkdown(res.review);
+      const raw=res.review;
+      const marker='<!-- SUGGESTED_JSON -->';
+      const idx=raw.indexOf(marker);
+      let mdPart=raw, jsonPart=null;
+      if(idx!==-1){
+        mdPart=raw.substring(0,idx);
+        const jsonStr=raw.substring(idx+marker.length).trim();
+        try{jsonPart=JSON.parse(jsonStr);window._aiSuggestedData=jsonPart}catch(e){console.warn('AI JSON parse failed',e)}
+      }
+      let html=simpleMarkdown(mdPart);
+      if(window._aiSuggestedData){
+        html+=`<div style="text-align:center;margin:20px 0"><button onclick="applyAiSuggestion()" style="padding:12px 32px;background:#2e7d32;color:#fff;border:none;border-radius:8px;font-size:16px;cursor:pointer;font-weight:600">✅ 套用 AI 建議</button></div>`;
+      }
+      body.innerHTML=html;
     }).catch(e=>{body.innerHTML=`<div style="color:#c62828;padding:20px">❌ 網路錯誤：${e.message}</div>`});
+}
+function applyAiSuggestion(){
+  if(!window._aiSuggestedData)return;
+  updateActiveItinerary(window._aiSuggestedData);
+  renderItinerary();renderMap();
+  showToastMsg('✅ 已套用 AI 建議');
+  closeAiReview();
 }
 function closeAiReview(){const o=document.getElementById('aiReviewModal');if(o)o.classList.remove('open')}
 function simpleMarkdown(md){
