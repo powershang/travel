@@ -844,7 +844,7 @@ function loadGoogleMapsApi(){
     return new Promise((resolve,reject)=>{
       if(window.google&&window.google.maps){resolve();return}
       const s=document.createElement('script');
-      s.src=`https://maps.googleapis.com/maps/api/js?key=${cfg.googleMapsApiKey}&libraries=places,marker&callback=__gmReady`;
+      s.src=`https://maps.googleapis.com/maps/api/js?key=${cfg.googleMapsApiKey}&libraries=places,marker&loading=async&callback=__gmReady`;
       s.async=true;s.defer=true;
       window.__gmReady=()=>{delete window.__gmReady;resolve()};
       s.onerror=reject;
@@ -1006,7 +1006,7 @@ function renderMap(){
     if(item.note) ph+=`<div style="margin-top:3px;font-size:11px;color:#666;white-space:pre-line">${item.note.split('\n').slice(0,2).join('\n')}</div>`;
     ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.name)}" target="_blank">📍 Google Maps</a>`;
     if(item.phone) ph+=` <a class="popup-call-btn" href="tel:${item.phone}">📞 撥打</a>`;
-    marker.addListener('click',()=>{
+    marker.addListener('gmp-click',()=>{
       gInfoWindow.setContent(ph);
       gInfoWindow.open(googleMap,marker);
       highlightCard(origIdx);
@@ -1041,7 +1041,7 @@ function renderOverallMap(){
       let ph=`<div class="popup-title">${item.icon} ${item.name}</div>`;
       ph+=`<div>${DAY_SHORT[di]} ${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
       ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.name)}" target="_blank">📍 Google Maps</a>`;
-      marker.addListener('click',()=>{
+      marker.addListener('gmp-click',()=>{
         gInfoWindow.setContent(ph);
         gInfoWindow.open(googleMap,marker);
       });
@@ -1223,7 +1223,7 @@ function initFoodMap(){
     ph+=`<div>${f.day} ・ ${f.where}</div>`;
     ph+=`<div style="margin-top:3px;font-size:11px;color:#666">${f.jp}</div>`;
     ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(f.gmap||f.name)}" target="_blank">📍 Google Maps</a>`;
-    marker.addListener('click',()=>{
+    marker.addListener('gmp-click',()=>{
       foodInfoWindow.setContent(ph);
       foodInfoWindow.open(foodMap,marker);
       highlightFoodCard(i);
