@@ -424,7 +424,7 @@ const reservations=[
 let currentDay=0, currentPage='itinerary-page', googleMap=null, mapMarkers=[], mapLines=[];
 let foodMap=null, foodMarkers=[];
 let gInfoWindow=null, foodInfoWindow=null;
-let resStatusMap=JSON.parse(localStorage.getItem('resStatus')||'{}');
+let resStatusMap={};
 let editMode=false;
 let editingIdx=-1; // -1 = new item
 let editingCoords=null;
@@ -437,15 +437,15 @@ let dragSrcIdx=null;
 
 // === MULTI-PLAN MANAGEMENT ===
 function genId(){return Math.random().toString(36).substr(2,8)}
+// === 方案資料（純記憶體 + DB，不用 localStorage）===
+let _plansCache=null;
+function defaultPlans(){return {plans:[{id:'default',name:'佐賀原始版',data:JSON.parse(JSON.stringify(ITINERARY_DEFAULT)),createdAt:new Date().toISOString()}],activeId:'default'}}
 function loadPlans(){
-  const raw=localStorage.getItem('trip_plans');
-  if(raw){try{return JSON.parse(raw)}catch(e){}}
-  const plans={plans:[{id:'default',name:'佐賀原始版',data:JSON.parse(JSON.stringify(ITINERARY_DEFAULT)),createdAt:new Date().toISOString()}],activeId:'default'};
-  savePlansData(plans);
-  return plans;
+  if(!_plansCache) _plansCache=defaultPlans();
+  return _plansCache;
 }
 function savePlansData(plans){
-  localStorage.setItem('trip_plans',JSON.stringify(plans));
+  _plansCache=plans;
   fetch('/api/data/trip_plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(plans)}).catch(()=>{});
 }
 function savePlans(){savePlansData(loadPlans())}
@@ -899,28 +899,25 @@ function loadGoogleMapsApi(){
 
 // === INIT ===
 async function init(){
-  // Try loading from DB first, fallback to localStorage
+  // Load from DB
   try {
     const [plansRes, resRes] = await Promise.all([
       fetch('/api/data/trip_plans').then(r=>r.json()).catch(()=>null),
       fetch('/api/data/resStatus').then(r=>r.json()).catch(()=>null)
     ]);
     if(plansRes && plansRes.plans){
-      localStorage.setItem('trip_plans',JSON.stringify(plansRes));
+      _plansCache=plansRes;
     } else {
-      // DB empty → upload localStorage/default to DB
-      const local=loadPlans();
-      fetch('/api/data/trip_plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(local)}).catch(()=>{});
+      // DB empty → upload default to DB
+      _plansCache=defaultPlans();
+      fetch('/api/data/trip_plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_plansCache)}).catch(()=>{});
     }
     if(resRes && typeof resRes==='object' && !resRes.error){
       resStatusMap=resRes;
-      localStorage.setItem('resStatus',JSON.stringify(resStatusMap));
     } else {
       fetch('/api/data/resStatus',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(resStatusMap)}).catch(()=>{});
     }
-  } catch(e){ /* offline or no DB — use localStorage */ }
-
-  loadPlans();
+  } catch(e){ /* offline or no DB — use default */ }
   const today=new Date().toISOString().slice(0,10);
   const idx=TRIP_DATES.indexOf(today);
   if(idx>=0) currentDay=idx;
@@ -1378,7 +1375,6 @@ function renderReservations(){
 }
 function toggleResStatus(i,b){
   resStatusMap[i]=!resStatusMap[i];
-  localStorage.setItem('resStatus',JSON.stringify(resStatusMap));
   fetch('/api/data/resStatus',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(resStatusMap)}).catch(()=>{});
   b.classList.toggle('confirmed');b.textContent=resStatusMap[i]?'✅ 已確認':'⬜ 待確認';
 }
