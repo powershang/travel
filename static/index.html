@@ -168,6 +168,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .ai-spinner .spin{display:inline-block;width:36px;height:36px;border:3px solid #eee;border-top-color:var(--pink);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* Import Modal */
+.import-modal textarea{width:100%;height:200px;border:1.5px solid #ddd;border-radius:8px;padding:10px;font-size:13px;font-family:monospace;resize:vertical}
+.import-modal textarea:focus{outline:none;border-color:var(--pink)}
+.import-modal .import-actions{display:flex;gap:8px;margin-top:12px}
+.import-modal .import-actions button{flex:1;padding:12px;border-radius:10px;font-size:14px;font-weight:600;border:none;cursor:pointer}
+.import-modal .btn-import{background:var(--pink);color:#fff}
+.import-modal .btn-import:active{background:var(--pink-dark)}
+.import-modal .btn-cancel{background:#eee;color:var(--text)}
+
 /* Map search overlay */
 .map-search{position:absolute;top:10px;left:10px;right:10px;z-index:500}
 .map-search input{width:100%;padding:10px 40px 10px 36px;border:none;border-radius:24px;font-size:14px;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.2);font-family:inherit}
@@ -229,9 +238,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     <div class="header">
       <div><h1>2026 佐賀旅行</h1><div class="subtitle">2/26 (四) ~ 3/3 (二) ・ 6天5夜 ｜ <span id="activePlanLabel" style="cursor:pointer;text-decoration:underline;opacity:1" onclick="openPlanModal()"></span></div></div>
       <div class="header-btns">
-        <button class="header-btn" id="btnAiReview" onclick="aiReview()" title="AI 審查" style="font-size:14px;width:auto;padding:0 10px;border-radius:17px;gap:4px">🤖 AI審查</button>
-        <button class="header-btn" id="btnPlans" onclick="openPlanModal()" title="行程方案">📋</button>
-        <button class="header-btn" id="btnEdit" onclick="toggleEditMode()" title="編輯模式">✏️</button>
+        <button class="header-btn" id="btnAiReview" onclick="aiReview()" title="AI 審查" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">🤖 AI審查</button>
+        <button class="header-btn" onclick="exportItinerary()" title="匯出行程" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📥 匯出</button>
+        <button class="header-btn" onclick="openImportModal()" title="匯入行程" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📤 匯入</button>
+        <button class="header-btn" id="btnPlans" onclick="openPlanModal()" title="行程方案" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📋 方案</button>
+        <button class="header-btn" id="btnEdit" onclick="toggleEditMode()" title="編輯模式" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">✏️ 編輯</button>
       </div>
     </div>
     <div class="day-chips" id="dayChips"></div>
@@ -341,7 +352,7 @@ const ITINERARY_DEFAULT={
 ],
 '2026-02-27':[
   {time:'09:30',name:'出發',type:'transport',icon:'🚗',coords:[33.2631,130.2980],duration:''},
-  {time:'10:05',name:'鏡神社 賞梅花',type:'spot',icon:'🌸',coords:[33.43182,130.00841],duration:'40分',note:'梅花季節（2-3月）賞梅名所',drive:'車程約35分'},
+  {time:'10:05',name:'鏡神社 賞梅花',type:'spot',icon:'🌸',coords:[33.43182,130.00841],gmap:'鏡神社',duration:'40分',note:'梅花季節（2-3月）賞梅名所',drive:'車程約35分'},
   {time:'11:00',name:'唐津城',type:'spot',icon:'🏯',coords:[33.45351,129.97819],duration:'60分',note:'別名「舞鶴城」，天守閣可眺望唐津灣',drive:'車程約15分'},
   {time:'12:10',name:'からつバーガー（虹の松原）',type:'snack',icon:'🍔',coords:[33.44427,129.99984],duration:'30分',note:'唐津漢堡・虹の松原名物\n路邊攤車・~¥500',phone:'0955-56-7119',drive:'車程約5分'},
   {time:'13:05',name:'呼子小吃：いかしゅうまい＋魚ロッケ',type:'snack',icon:'🦑',coords:[33.53709,129.89473],duration:'30分',note:'烏賊燒賣（萬坊 発祥店）~¥500\n魚肉可樂餅 ~¥200',drive:'車程約25分'},
@@ -868,7 +879,7 @@ function addSearchResultToItinerary(){
 
 // === HELPERS ===
 function gmapNavUrl(lat,lng){return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`}
-function gmapSearchUrl(name){return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`}
+function gmapSearchUrl(name,coords){const q=encodeURIComponent(name);if(coords&&coords[0]>30)return`https://www.google.com/maps/search/${q}/@${coords[0]},${coords[1]},17z`;return`https://www.google.com/maps/search/?api=1&query=${q}`}
 
 // === LOAD GOOGLE MAPS API ===
 function loadGoogleMapsApi(){
@@ -1097,7 +1108,7 @@ function renderMap(){
     let ph=`<div class="popup-title">${item.icon} ${item.name}</div>`;
     ph+=`<div>${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
     if(item.note) ph+=`<div style="margin-top:3px;font-size:11px;color:#666;white-space:pre-line">${item.note.split('\n').slice(0,2).join('\n')}</div>`;
-    ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.name)}" target="_blank">📍 Google Maps</a>`;
+    ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.gmap||item.name,item.coords)}" target="_blank">📍 Google Maps</a>`;
     if(item.phone) ph+=` <a class="popup-call-btn" href="tel:${item.phone}">📞 撥打</a>`;
     marker.addListener('gmp-click',()=>{
       gInfoWindow.setContent(ph);
@@ -1133,7 +1144,7 @@ function renderOverallMap(){
       });
       let ph=`<div class="popup-title">${item.icon} ${item.name}</div>`;
       ph+=`<div>${DAY_SHORT[di]} ${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
-      ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.name)}" target="_blank">📍 Google Maps</a>`;
+      ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.gmap||item.name,item.coords)}" target="_blank">📍 Google Maps</a>`;
       marker.addListener('gmp-click',()=>{
         gInfoWindow.setContent(ph);
         gInfoWindow.open(googleMap,marker);
@@ -1208,7 +1219,7 @@ function renderItinerary(){
       html+=`<div class="card-detail" id="detail-${idx}">`;
       if(item.note) html+=`<div style="white-space:pre-line;font-size:12px;color:var(--text2);padding:4px 0;line-height:1.6">${item.note}</div>`;
       html+=`<div class="card-actions">`;
-      if(item.coords&&item.coords[0]>30) html+=`<a class="btn btn-nav" href="${gmapSearchUrl(item.name)}" target="_blank" onclick="event.stopPropagation()">📍 Google Maps</a>`;
+      if(item.coords&&item.coords[0]>30) html+=`<a class="btn btn-nav" href="${gmapSearchUrl(item.gmap||item.name,item.coords)}" target="_blank" onclick="event.stopPropagation()">📍 Google Maps</a>`;
       if(item.phone) html+=`<a class="btn btn-call" href="tel:${item.phone}" onclick="event.stopPropagation()">📞 ${item.phone}</a>`;
       if(item.tabelog) html+=`<a class="btn btn-link" href="${item.tabelog}" target="_blank" onclick="event.stopPropagation()">⭐ Tabelog</a>`;
       html+=`</div></div>`;
@@ -1282,7 +1293,7 @@ function renderFoodPage(){
     h+=`<div class="food-card" id="food-card-${i}" onclick="onFoodCardClick(${i})" style="cursor:pointer"><div class="food-name">${f.name}</div><div class="food-jp">🇯🇵 ${f.jp}</div>`;
     h+=`<div class="food-desc">${f.desc}</div><div><span class="food-tag day">${f.day}</span><span class="food-tag price">${f.price}</span><span class="food-tag rating">推薦 ${f.rating}</span></div>`;
     h+=`<div style="font-size:11px;color:var(--text2);margin-top:4px">📍 ${f.where}`;
-    if(f.coords) h+=` <a class="btn btn-nav" href="${gmapSearchUrl(f.gmap||f.name)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:4px">📍 Google Maps</a>`;
+    if(f.coords) h+=` <a class="btn btn-nav" href="${gmapSearchUrl(f.gmap||f.name,f.coords)}" target="_blank" onclick="event.stopPropagation()" style="margin-left:4px">📍 Google Maps</a>`;
     h+=`</div></div>`;
   });
   h+='<div class="section-title">🐟 季節海鮮指南</div>';
@@ -1317,7 +1328,7 @@ function initFoodMap(){
     let ph=`<div class="popup-title">🍽 ${f.name}</div>`;
     ph+=`<div>${f.day} ・ ${f.where}</div>`;
     ph+=`<div style="margin-top:3px;font-size:11px;color:#666">${f.jp}</div>`;
-    ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(f.gmap||f.name)}" target="_blank">📍 Google Maps</a>`;
+    ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(f.gmap||f.name,f.coords)}" target="_blank">📍 Google Maps</a>`;
     marker.addListener('gmp-click',()=>{
       foodInfoWindow.setContent(ph);
       foodInfoWindow.open(foodMap,marker);
@@ -1358,7 +1369,7 @@ function renderReservations(){
     h+=`<div class="res-date">${r.date} ${r.time}</div></div>`;
     h+=`<div class="res-info">🍽 ${r.cuisine}<br>💰 ${r.price}<br>👥 ${r.pax}<br>📝 ${r.note.replace(/\n/g,'<br>')}</div>`;
     h+=`<div class="res-actions"><a class="btn btn-call" href="tel:${r.phone}">📞 ${r.phone}</a>`;
-    if(r.coords) h+=`<a class="btn btn-nav" href="${gmapSearchUrl(r.name)}" target="_blank">📍 Google Maps</a>`;
+    if(r.coords) h+=`<a class="btn btn-nav" href="${gmapSearchUrl(r.name,r.coords)}" target="_blank">📍 Google Maps</a>`;
     if(r.tabelog) h+=`<a class="btn btn-link" href="${r.tabelog}" target="_blank">⭐ Tabelog</a>`;
     h+=`<button class="res-status${cf?' confirmed':''}" onclick="toggleResStatus(${i},this)">${cf?'✅ 已確認':'⬜ 待確認'}</button></div></div>`;
   });
@@ -1392,6 +1403,56 @@ if('serviceWorker' in navigator){
 }
 const mf={name:'2026 佐賀旅行',short_name:'佐賀旅行',start_url:'.',display:'standalone',background_color:'#f5f5f5',theme_color:'#e91e63',icons:[{src:'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjZTkxZTYzIi8+PHRleHQgeD0iOTAiIHk9IjEwNSIgZm9udC1zaXplPSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiPuS9kOizgDwvdGV4dD48dGV4dCB4PSI5MCIgeT0iMTQ1IiBmb250LXNpemU9IjMwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZjY2JjIj7ml4XooYwgMjAyNjwvdGV4dD48L3N2Zz4=',sizes:'180x180',type:'image/svg+xml'}]};
 const ml=document.createElement('link');ml.rel='manifest';ml.href=URL.createObjectURL(new Blob([JSON.stringify(mf)],{type:'application/json'}));document.head.appendChild(ml);
+
+// === EXPORT / IMPORT ===
+function exportItinerary(){
+  const plan=getActivePlan();
+  const json=JSON.stringify(plan.data,null,2);
+  navigator.clipboard.writeText(json).then(()=>{
+    showToastMsg('✅ 已複製「'+plan.name+'」行程 JSON 到剪貼簿');
+  }).catch(()=>{
+    // fallback: show in modal
+    openImportModalWith(json,true);
+  });
+}
+function showToastMsg(msg){
+  const t=document.createElement('div');t.className='toast';t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
+}
+function openImportModal(){
+  let overlay=document.getElementById('importModal');
+  if(!overlay){
+    overlay=document.createElement('div');
+    overlay.id='importModal';
+    overlay.className='modal-overlay import-modal';
+    overlay.innerHTML=`<div class="modal-panel"><div class="modal-header"><h2>📤 匯入行程 JSON</h2><button class="modal-close" onclick="closeImportModal()">✕</button></div><p style="font-size:13px;color:var(--text2);margin-bottom:10px">貼上行程 JSON，將覆蓋「<span id="importPlanName"></span>」的內容</p><textarea id="importTextarea" placeholder='貼上 JSON...'></textarea><div class="import-actions"><button class="btn-cancel" onclick="closeImportModal()">取消</button><button class="btn-import" onclick="doImport()">匯入並套用</button></div></div>`;
+    overlay.addEventListener('click',e=>{if(e.target===overlay)closeImportModal()});
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('importPlanName').textContent=getActivePlan().name;
+  document.getElementById('importTextarea').value='';
+  overlay.classList.add('open');
+}
+function closeImportModal(){const o=document.getElementById('importModal');if(o)o.classList.remove('open')}
+function doImport(){
+  const raw=document.getElementById('importTextarea').value.trim();
+  if(!raw){alert('請貼上 JSON');return}
+  try{
+    const data=JSON.parse(raw);
+    if(typeof data!=='object'||Array.isArray(data)){throw new Error('格式錯誤')}
+    // Validate: should have date keys with arrays
+    const keys=Object.keys(data);
+    if(!keys.length) throw new Error('空資料');
+    const hasDateKey=keys.some(k=>/^\d{4}-\d{2}-\d{2}$/.test(k));
+    if(!hasDateKey) throw new Error('找不到日期 key（格式：YYYY-MM-DD）');
+    updateActiveItinerary(data);
+    closeImportModal();
+    renderItinerary(); renderMap();
+    showToastMsg('✅ 行程已匯入並套用');
+  }catch(e){
+    alert('JSON 解析失敗：'+e.message);
+  }
+}
 
 // === AI REVIEW ===
 function aiReview(){
