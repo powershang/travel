@@ -38,6 +38,10 @@ init_db()
 def index():
     return send_from_directory('static', 'index.html')
 
+@app.route('/api/config')
+def get_config():
+    return jsonify({'googleMapsApiKey': GOOGLE_API_KEY})
+
 # --- Google Places Proxy ---
 @app.route('/api/places/autocomplete')
 def places_autocomplete():

@@ -9,8 +9,6 @@
 <meta name="theme-color" content="#e91e63">
 <title>2026 佐賀旅行</title>
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjZTkxZTYzIi8+PHRleHQgeD0iOTAiIHk9IjEwNSIgZm9udC1zaXplPSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiPuS9kOizgDwvdGV4dD48dGV4dCB4PSI5MCIgeT0iMTQ1IiBmb250LXNpemU9IjMwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZjY2JjIj7ml4XooYwgMjAyNjwvdGV4dD48L3N2Zz4=">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root {
   --pink: #e91e63;
@@ -169,9 +167,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .popup-add-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:var(--pink);color:#fff;border-radius:6px;border:none;font-size:11px;font-weight:600;cursor:pointer}
 .popup-add-btn:active{opacity:.7}
 
-.leaflet-popup-content{font-size:12px;line-height:1.5}
-.leaflet-popup-content a.popup-nav-btn,.leaflet-popup-content a.popup-call-btn{color:#fff !important}
-.leaflet-popup-content .popup-title{font-weight:600;font-size:13px;margin-bottom:3px}
+.gm-iw-content{font-size:12px;line-height:1.5}
+.gm-iw-content .popup-title{font-weight:600;font-size:13px;margin-bottom:3px}
 .popup-nav-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:#4285f4;color:#fff !important;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600}
 .popup-call-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:#2e7d32;color:#fff;border-radius:6px;text-decoration:none;font-size:11px}
 .marker-num{width:22px;height:22px;line-height:22px;text-align:center;font-size:11px;font-weight:700;border-radius:50%;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
@@ -380,8 +377,9 @@ const reservations=[
 ];
 
 // === STATE ===
-let currentDay=0, currentPage='itinerary-page', leafletMap=null, mapMarkers=[], mapLines=[];
+let currentDay=0, currentPage='itinerary-page', googleMap=null, mapMarkers=[], mapLines=[];
 let foodMap=null, foodMarkers=[];
+let gInfoWindow=null, foodInfoWindow=null;
 let resStatusMap=JSON.parse(localStorage.getItem('resStatus')||'{}');
 let editMode=false;
 let editingIdx=-1; // -1 = new item
@@ -767,18 +765,23 @@ function selectMapPlace(placeId){
       document.getElementById('mapSearchClear').classList.add('show');
       mapSearchResult={name,lat,lng,phone:r.formatted_phone_number||'',address:r.formatted_address||''};
       // Remove old search marker
-      if(mapSearchMarker&&leafletMap){leafletMap.removeLayer(mapSearchMarker);mapSearchMarker=null}
+      if(mapSearchMarker){mapSearchMarker.map=null;mapSearchMarker=null}
       // Add red search marker
-      const icon=L.divIcon({html:'<div class="marker-label" style="background:#f44336">🔍 '+name+'</div>',iconSize:[null,null],iconAnchor:[12,14],className:''});
-      mapSearchMarker=L.marker([lat,lng],{icon}).addTo(leafletMap);
-      // Popup
+      mapSearchMarker=new google.maps.marker.AdvancedMarkerElement({
+        map:googleMap,
+        position:{lat,lng},
+        content:createMarkerContent('🔍 '+name,'#f44336')
+      });
+      // InfoWindow
       let ph=`<div class="popup-title">🔍 ${name}</div>`;
       if(mapSearchResult.address) ph+=`<div style="font-size:11px;color:#666">${mapSearchResult.address}</div>`;
       if(mapSearchResult.phone) ph+=`<div style="font-size:11px">📞 ${mapSearchResult.phone}</div>`;
       ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(name)}" target="_blank">📍 Google Maps</a>`;
       ph+=` <button class="popup-add-btn" onclick="addSearchResultToItinerary()">+ 加入行程</button>`;
-      mapSearchMarker.bindPopup(ph,{maxWidth:280}).openPopup();
-      leafletMap.flyTo([lat,lng],16);
+      gInfoWindow.setContent(ph);
+      gInfoWindow.open(googleMap,mapSearchMarker);
+      googleMap.panTo({lat,lng});
+      googleMap.setZoom(16);
     }).catch(()=>{});
 }
 
@@ -786,7 +789,7 @@ function clearMapSearch(){
   document.getElementById('mapSearchInput').value='';
   document.getElementById('mapSearchClear').classList.remove('show');
   document.getElementById('mapSearchResults').classList.remove('show');
-  if(mapSearchMarker&&leafletMap){leafletMap.removeLayer(mapSearchMarker);mapSearchMarker=null}
+  if(mapSearchMarker){mapSearchMarker.map=null;mapSearchMarker=null}
   mapSearchResult=null;
 }
 
@@ -828,12 +831,27 @@ function addSearchResultToItinerary(){
         }).catch(()=>{});
     }
   }
-  if(mapSearchMarker) mapSearchMarker.closePopup();
+  if(gInfoWindow) gInfoWindow.close();
 }
 
 // === HELPERS ===
 function gmapNavUrl(lat,lng){return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`}
 function gmapSearchUrl(name){return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`}
+
+// === LOAD GOOGLE MAPS API ===
+function loadGoogleMapsApi(){
+  return fetch('/api/config').then(r=>r.json()).then(cfg=>{
+    return new Promise((resolve,reject)=>{
+      if(window.google&&window.google.maps){resolve();return}
+      const s=document.createElement('script');
+      s.src=`https://maps.googleapis.com/maps/api/js?key=${cfg.googleMapsApiKey}&libraries=places,marker&callback=__gmReady`;
+      s.async=true;s.defer=true;
+      window.__gmReady=()=>{delete window.__gmReady;resolve()};
+      s.onerror=reject;
+      document.head.appendChild(s);
+    });
+  });
+}
 
 // === INIT ===
 async function init(){
@@ -863,7 +881,7 @@ async function init(){
   const idx=TRIP_DATES.indexOf(today);
   if(idx>=0) currentDay=idx;
   renderDayChips(); renderItinerary(); renderFoodPage(); renderReservations(); setupTabs();
-  setTimeout(initMap,200);
+  loadGoogleMapsApi().then(()=>setTimeout(initMap,100)).catch(e=>console.warn('Google Maps load failed',e));
   updateCountdown(); setInterval(updateCountdown,60000);
 }
 
@@ -887,74 +905,158 @@ function renderDayChips(){
   });
 }
 
+// === MAP HELPERS ===
+function createMarkerContent(label,color){
+  const div=document.createElement('div');
+  div.className='marker-label';
+  div.style.background=color;
+  div.textContent=label;
+  return div;
+}
+
 // === MAP ===
 function initMap(){
-  if(leafletMap) return;
-  leafletMap=L.map('map-container',{zoomControl:false}).setView([33.25,130.1],9);
-  L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',{maxZoom:20,attribution:'&copy; Google Maps'}).addTo(leafletMap);
-  L.control.zoom({position:'bottomright'}).addTo(leafletMap);
+  if(googleMap) return;
+  if(!window.google||!window.google.maps) return;
+  googleMap=new google.maps.Map(document.getElementById('map-container'),{
+    center:{lat:33.25,lng:130.1},zoom:9,
+    mapId:'TRAVEL_MAP_MAIN',
+    zoomControl:true,
+    zoomControlOptions:{position:google.maps.ControlPosition.RIGHT_BOTTOM},
+    streetViewControl:false,
+    fullscreenControl:false
+  });
+  gInfoWindow=new google.maps.InfoWindow();
+
+  // POI click
+  googleMap.addListener('click',(e)=>{
+    if(e.placeId){
+      e.stop();
+      handlePoiClick(e.placeId,e.latLng);
+    }
+  });
+
   renderMap();
 }
 
+function handlePoiClick(placeId,latLng){
+  fetch('/api/places/details?place_id='+placeId)
+    .then(r=>r.json()).then(data=>{
+      const r=data.result||{};
+      const name=r.name||'未知地點';
+      let html=`<div class="popup-title">${name}</div>`;
+      if(r.formatted_address) html+=`<div style="font-size:11px;color:#666">${r.formatted_address}</div>`;
+      if(r.rating) html+=`<div style="font-size:11px">⭐ ${r.rating}</div>`;
+      if(r.formatted_phone_number) html+=`<div style="font-size:11px">📞 ${r.formatted_phone_number}</div>`;
+      html+=`<a class="popup-nav-btn" href="${gmapSearchUrl(name)}" target="_blank">📍 Google Maps</a>`;
+      html+=` <button class="popup-add-btn" onclick="addPoiToItinerary('${name.replace(/'/g,"\\'")}',${latLng.lat()},${latLng.lng()},'${(r.formatted_phone_number||'').replace(/'/g,"\\'")}')">+ 加入行程</button>`;
+      gInfoWindow.setContent(html);
+      gInfoWindow.setPosition(latLng);
+      gInfoWindow.open(googleMap);
+    }).catch(()=>{});
+}
+
+function addPoiToItinerary(name,lat,lng,phone){
+  const itin=getActiveItinerary();
+  const date=TRIP_DATES[currentDay<0?0:currentDay];
+  const items=itin[date]||[];
+  let defaultTime='09:00';
+  if(items.length){
+    const last=items[items.length-1];
+    const m=last.time.match(/^(\d{1,2}):(\d{2})$/);
+    if(m){
+      let mins=parseInt(m[1])*60+parseInt(m[2]);
+      const durMatch=(last.duration||'').match(/(\d+)/);
+      mins+=durMatch?parseInt(durMatch[1]):60;
+      const h=Math.floor(mins/60),mi=mins%60;
+      defaultTime=`${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}`;
+    }
+  }
+  if(currentDay<0) currentDay=0;
+  openEditPanel(-1);
+  document.getElementById('epName').value=name;
+  document.getElementById('epTime').value=defaultTime;
+  if(phone) document.getElementById('epPhone').value=phone;
+  editingCoords=[lat,lng];
+  document.getElementById('epCoords').textContent=`${lat}, ${lng}`;
+  gInfoWindow.close();
+}
+
 function renderMap(){
-  if(!leafletMap) return;
-  mapMarkers.forEach(m=>leafletMap.removeLayer(m));
-  mapLines.forEach(l=>leafletMap.removeLayer(l));
+  if(!googleMap) return;
+  mapMarkers.forEach(m=>m.map=null);
+  mapLines.forEach(l=>l.setMap(null));
   mapMarkers=[];mapLines=[];
   if(currentDay===-1){ renderOverallMap(); return; }
   const date=TRIP_DATES[currentDay], itin=getActiveItinerary(), allItems=itin[date]||[];
   const items=allItems.filter(i=>i.coords&&i.coords[0]>30);
   if(!items.length) return;
   const colors={spot:'#4caf50',restaurant:'#ff9800',hotel:'#e91e63',snack:'#ffc107',airport:'#607d8b',transport:'#2196f3'};
-  const bounds=[];
+  const bounds=new google.maps.LatLngBounds();
   items.forEach((item,idx)=>{
     const origIdx=allItems.indexOf(item);
     const color=colors[item.type]||'#999';
-    const labelIcon=L.divIcon({html:`<div class="marker-label" style="background:${color}">${idx+1}. ${item.icon} ${item.name}</div>`,iconSize:[null,null],iconAnchor:[12,14],className:''});
-    const marker=L.marker([item.coords[0],item.coords[1]],{icon:labelIcon}).addTo(leafletMap);
+    const marker=new google.maps.marker.AdvancedMarkerElement({
+      map:googleMap,
+      position:{lat:item.coords[0],lng:item.coords[1]},
+      content:createMarkerContent(`${idx+1}. ${item.icon} ${item.name}`,color)
+    });
     let ph=`<div class="popup-title">${item.icon} ${item.name}</div>`;
     ph+=`<div>${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
     if(item.note) ph+=`<div style="margin-top:3px;font-size:11px;color:#666;white-space:pre-line">${item.note.split('\n').slice(0,2).join('\n')}</div>`;
     ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.name)}" target="_blank">📍 Google Maps</a>`;
     if(item.phone) ph+=` <a class="popup-call-btn" href="tel:${item.phone}">📞 撥打</a>`;
-    marker.bindPopup(ph,{maxWidth:260});
-    marker.on('click',()=>highlightCard(origIdx));
+    marker.addListener('click',()=>{
+      gInfoWindow.setContent(ph);
+      gInfoWindow.open(googleMap,marker);
+      highlightCard(origIdx);
+    });
     mapMarkers.push(marker);
-    bounds.push([item.coords[0],item.coords[1]]);
+    bounds.extend({lat:item.coords[0],lng:item.coords[1]});
   });
-  if(bounds.length>1){
-    const line=L.polyline(bounds,{color:'#e91e63',weight:2.5,opacity:.4,dashArray:'6 4'}).addTo(leafletMap);
+  if(items.length>1){
+    const path=items.map(i=>({lat:i.coords[0],lng:i.coords[1]}));
+    const line=new google.maps.Polyline({path,strokeColor:'#e91e63',strokeWeight:2.5,strokeOpacity:.4,map:googleMap});
     mapLines.push(line);
   }
-  leafletMap.fitBounds(bounds,{padding:[30,30]});
+  googleMap.fitBounds(bounds,30);
 }
 
 function renderOverallMap(){
   const dayColors=['#e91e63','#ff9800','#4caf50','#2196f3','#9c27b0','#607d8b'];
   const itin=getActiveItinerary();
-  const allBounds=[];
+  const allBounds=new google.maps.LatLngBounds();
+  let hasBounds=false;
   TRIP_DATES.forEach((date,di)=>{
     const items=(itin[date]||[]).filter(i=>i.coords&&i.coords[0]>30);
     if(!items.length) return;
     const color=dayColors[di]||'#999';
-    const routeCoords=[];
+    const routePath=[];
     items.forEach(item=>{
-      const labelIcon=L.divIcon({html:`<div class="marker-label" style="background:${color}">${DAY_SHORT[di]} ${item.icon} ${item.name}</div>`,iconSize:[null,null],iconAnchor:[12,14],className:''});
-      const marker=L.marker([item.coords[0],item.coords[1]],{icon:labelIcon}).addTo(leafletMap);
+      const marker=new google.maps.marker.AdvancedMarkerElement({
+        map:googleMap,
+        position:{lat:item.coords[0],lng:item.coords[1]},
+        content:createMarkerContent(`${DAY_SHORT[di]} ${item.icon} ${item.name}`,color)
+      });
       let ph=`<div class="popup-title">${item.icon} ${item.name}</div>`;
       ph+=`<div>${DAY_SHORT[di]} ${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
       ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(item.name)}" target="_blank">📍 Google Maps</a>`;
-      marker.bindPopup(ph,{maxWidth:260});
+      marker.addListener('click',()=>{
+        gInfoWindow.setContent(ph);
+        gInfoWindow.open(googleMap,marker);
+      });
       mapMarkers.push(marker);
-      routeCoords.push([item.coords[0],item.coords[1]]);
-      allBounds.push([item.coords[0],item.coords[1]]);
+      const pos={lat:item.coords[0],lng:item.coords[1]};
+      routePath.push(pos);
+      allBounds.extend(pos);
+      hasBounds=true;
     });
-    if(routeCoords.length>1){
-      const line=L.polyline(routeCoords,{color:color,weight:3,opacity:.6,dashArray:'6 4'}).addTo(leafletMap);
+    if(routePath.length>1){
+      const line=new google.maps.Polyline({path:routePath,strokeColor:color,strokeWeight:3,strokeOpacity:.6,map:googleMap});
       mapLines.push(line);
     }
   });
-  if(allBounds.length) leafletMap.fitBounds(allBounds,{padding:[30,30]});
+  if(hasBounds) googleMap.fitBounds(allBounds,30);
 }
 
 function highlightCard(idx){
@@ -969,12 +1071,15 @@ function highlightCard(idx){
   }
 }
 function focusMap(lat,lng){
-  if(!leafletMap) return;
-  leafletMap.setView([lat,lng],14,{animate:true});
+  if(!googleMap) return;
+  googleMap.panTo({lat,lng});
+  googleMap.setZoom(14);
   const itin=getActiveItinerary();
   const items=(itin[TRIP_DATES[currentDay]]||[]).filter(i=>i.coords&&i.coords[0]>30);
   const mi=items.findIndex(i=>i.coords[0]===lat&&i.coords[1]===lng);
-  if(mi>=0&&mapMarkers[mi]) mapMarkers[mi].openPopup();
+  if(mi>=0&&mapMarkers[mi]){
+    google.maps.event.trigger(mapMarkers[mi],'click');
+  }
 }
 
 // === ITINERARY CARDS ===
@@ -1093,33 +1198,49 @@ function renderFoodPage(){
 
 function initFoodMap(){
   if(foodMap) return;
-  foodMap=L.map('food-map-container',{zoomControl:false}).setView([33.25,130.1],9);
-  L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',{maxZoom:20,attribution:'&copy; Google Maps'}).addTo(foodMap);
-  L.control.zoom({position:'bottomright'}).addTo(foodMap);
+  if(!window.google||!window.google.maps) return;
+  foodMap=new google.maps.Map(document.getElementById('food-map-container'),{
+    center:{lat:33.25,lng:130.1},zoom:9,
+    mapId:'TRAVEL_MAP_FOOD',
+    zoomControl:true,
+    zoomControlOptions:{position:google.maps.ControlPosition.RIGHT_BOTTOM},
+    streetViewControl:false,
+    fullscreenControl:false
+  });
+  foodInfoWindow=new google.maps.InfoWindow();
   const colors={Day1:'#e91e63',Day2:'#ff9800',Day3:'#4caf50',Day4:'#2196f3',Day5:'#9c27b0'};
-  const bounds=[];
+  const bounds=new google.maps.LatLngBounds();
+  let hasBounds=false;
   foods.forEach((f,i)=>{
     if(!f.coords) return;
     const color=colors[f.day]||'#999';
-    const labelIcon=L.divIcon({html:`<div class="marker-label" style="background:${color}">${i+1}. 🍽 ${f.name}</div>`,iconSize:[null,null],iconAnchor:[12,14],className:''});
-    const marker=L.marker([f.coords[0],f.coords[1]],{icon:labelIcon}).addTo(foodMap);
+    const marker=new google.maps.marker.AdvancedMarkerElement({
+      map:foodMap,
+      position:{lat:f.coords[0],lng:f.coords[1]},
+      content:createMarkerContent(`${i+1}. 🍽 ${f.name}`,color)
+    });
     let ph=`<div class="popup-title">🍽 ${f.name}</div>`;
     ph+=`<div>${f.day} ・ ${f.where}</div>`;
     ph+=`<div style="margin-top:3px;font-size:11px;color:#666">${f.jp}</div>`;
     ph+=`<a class="popup-nav-btn" href="${gmapSearchUrl(f.gmap||f.name)}" target="_blank">📍 Google Maps</a>`;
-    marker.bindPopup(ph,{maxWidth:260});
-    marker.on('click',()=>highlightFoodCard(i));
+    marker.addListener('click',()=>{
+      foodInfoWindow.setContent(ph);
+      foodInfoWindow.open(foodMap,marker);
+      highlightFoodCard(i);
+    });
     foodMarkers.push(marker);
-    bounds.push([f.coords[0],f.coords[1]]);
+    bounds.extend({lat:f.coords[0],lng:f.coords[1]});
+    hasBounds=true;
   });
-  if(bounds.length) foodMap.fitBounds(bounds,{padding:[30,30]});
+  if(hasBounds) foodMap.fitBounds(bounds,30);
 }
 
 function onFoodCardClick(idx){
   const f=foods[idx];
   if(!f||!f.coords||!foodMap) return;
-  foodMap.setView([f.coords[0],f.coords[1]],14,{animate:true});
-  if(foodMarkers[idx]) foodMarkers[idx].openPopup();
+  foodMap.panTo({lat:f.coords[0],lng:f.coords[1]});
+  foodMap.setZoom(14);
+  if(foodMarkers[idx]) google.maps.event.trigger(foodMarkers[idx],'click');
 }
 
 function highlightFoodCard(idx){
@@ -1163,15 +1284,15 @@ function setupTabs(){
       currentPage=page;
       document.querySelectorAll('.tab-item').forEach(t=>t.classList.toggle('active',t===tab));
       document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===page));
-      if(page==='itinerary-page'&&leafletMap) setTimeout(()=>{leafletMap.invalidateSize();renderMap()},100);
-      if(page==='food-page') setTimeout(()=>{if(!foodMap) initFoodMap(); else foodMap.invalidateSize();},100);
+      if(page==='itinerary-page'&&googleMap) setTimeout(()=>{google.maps.event.trigger(googleMap,'resize');renderMap()},100);
+      if(page==='food-page') setTimeout(()=>{if(!foodMap) initFoodMap(); else google.maps.event.trigger(foodMap,'resize');},100);
     };
   });
 }
 
 // === SERVICE WORKER + MANIFEST ===
 if('serviceWorker' in navigator){
-  const sw=`const C='saga-v5';const U=['./','https://unpkg.com/leaflet@1.9.4/dist/leaflet.css','https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(U)).then(()=>self.skipWaiting())));self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{if(res.ok){const c=res.clone();caches.open(C).then(cache=>cache.put(e.request,c));}return res}).catch(()=>new Response('離線中',{headers:{'Content-Type':'text/plain'}})))));`;
+  const sw=`const C='saga-v6';const U=['./'];self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(U)).then(()=>self.skipWaiting())));self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==C).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request).then(res=>{if(res.ok){const c=res.clone();caches.open(C).then(cache=>cache.put(e.request,c));}return res}).catch(()=>new Response('離線中',{headers:{'Content-Type':'text/plain'}})))));`;
   navigator.serviceWorker.register(URL.createObjectURL(new Blob([sw],{type:'application/javascript'}))).catch(()=>{});
 }
 const mf={name:'2026 佐賀旅行',short_name:'佐賀旅行',start_url:'.',display:'standalone',background_color:'#f5f5f5',theme_color:'#e91e63',icons:[{src:'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjZTkxZTYzIi8+PHRleHQgeD0iOTAiIHk9IjEwNSIgZm9udC1zaXplPSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiPuS9kOizgDwvdGV4dD48dGV4dCB4PSI5MCIgeT0iMTQ1IiBmb250LXNpemU9IjMwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZjY2JjIj7ml4XooYwgMjAyNjwvdGV4dD48L3N2Zz4=',sizes:'180x180',type:'image/svg+xml'}]};
