@@ -134,6 +134,27 @@ def put_data(key):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/review', methods=['POST'])
+def ai_review():
+    api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+    if not api_key:
+        return jsonify({'error': '未設定 ANTHROPIC_API_KEY'}), 500
+    try:
+        import anthropic
+        data = request.get_json() or {}
+        itinerary = data.get('itinerary', '')
+        client = anthropic.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model='claude-sonnet-4-5-20250929',
+            max_tokens=4096,
+            system='你是一位專業的日本旅行顧問，精通九州（特別是佐賀、長崎、福岡）地區。請用繁體中文回覆。針對使用者提供的行程，請全面分析以下面向：\n1. **時間合理性**：每個景點停留時間、交通時間是否合理\n2. **路線效率**：是否有繞路或可優化的路線\n3. **景點/美食推薦**：根據路線推薦附近值得順道造訪的景點或美食\n4. **備案方案**：若遇雨天或景點臨時關閉的替代方案\n5. **帶小孩注意事項**：適合親子的建議\n\n請用 Markdown 格式回覆，使用標題和清單讓內容清晰易讀。',
+            messages=[{'role': 'user', 'content': f'以下是我的行程，請幫我全面審查並給建議：\n\n{itinerary}'}]
+        )
+        review_text = msg.content[0].text
+        return jsonify({'review': review_text})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/<path:path>')
 def serve_static(path):
     return send_from_directory('static', path)
