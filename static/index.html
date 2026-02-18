@@ -170,6 +170,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .gm-iw-content{font-size:12px;line-height:1.5}
 .gm-iw-content .popup-title{font-weight:600;font-size:13px;margin-bottom:3px}
 .popup-nav-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:#4285f4;color:#fff !important;border-radius:6px;text-decoration:none;font-size:11px;font-weight:600}
+.poi-card{max-width:320px;font-size:12px;line-height:1.5}
+.poi-photos{display:flex;gap:4px;overflow-x:auto;margin-bottom:6px;scroll-snap-type:x mandatory}
+.poi-photos img{width:140px;height:100px;object-fit:cover;border-radius:6px;scroll-snap-align:start;flex-shrink:0}
+.poi-meta{color:#666;font-size:11px;margin:2px 0}
+.poi-tags{display:flex;flex-wrap:wrap;gap:3px;margin:4px 0}
+.poi-tags span{background:#f0f0f0;border-radius:10px;padding:1px 7px;font-size:10px;color:#555}
+.poi-hours-toggle{color:#1a73e8;cursor:pointer;font-size:11px;border:none;background:none;padding:0;text-decoration:underline}
+.poi-hours-full{display:none;font-size:11px;color:#555;margin:2px 0 4px 0;white-space:pre-line}
+.poi-hours-full.open{display:block}
+.poi-review{border-top:1px solid #eee;padding:4px 0;margin-top:4px}
+.poi-review .stars{color:#fbbc04;font-size:11px}
+.poi-review .author{font-weight:600;font-size:11px}
+.poi-review .text{font-size:11px;color:#444;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.poi-actions{margin-top:6px;display:flex;gap:6px}
 .popup-call-btn{display:inline-block;margin-top:5px;padding:5px 10px;background:#2e7d32;color:#fff;border-radius:6px;text-decoration:none;font-size:11px}
 .marker-num{width:22px;height:22px;line-height:22px;text-align:center;font-size:11px;font-weight:700;border-radius:50%;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .marker-label{white-space:nowrap;padding:3px 8px;border-radius:12px;font-size:11px;font-weight:700;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,.3);line-height:1.3}
@@ -939,18 +953,79 @@ function initMap(){
   renderMap();
 }
 
+const POI_TYPE_ZH={'restaurant':'餐廳','cafe':'咖啡廳','bar':'酒吧','lodging':'住宿','park':'公園','museum':'博物館','shrine':'神社','temple':'寺廟','store':'商店','shopping_mall':'商場','convenience_store':'便利店','train_station':'車站','bus_station':'公車站','airport':'機場','pharmacy':'藥局','hospital':'醫院','bakery':'麵包店','supermarket':'超市','tourist_attraction':'觀光景點','amusement_park':'遊樂園','aquarium':'水族館','zoo':'動物園','spa':'溫泉','book_store':'書店','clothing_store':'服飾店'};
+function poiStars(n){return '★'.repeat(Math.round(n))+'☆'.repeat(5-Math.round(n));}
+function poiPrice(l){return l?'·'+'$'.repeat(l):'';}
+
 function handlePoiClick(placeId,latLng){
   fetch('/api/places/details?place_id='+placeId)
     .then(r=>r.json()).then(data=>{
       const r=data.result||{};
       const name=r.name||'未知地點';
-      let html=`<div class="popup-title">${name}</div>`;
-      if(r.formatted_address) html+=`<div style="font-size:11px;color:#666">${r.formatted_address}</div>`;
-      if(r.rating) html+=`<div style="font-size:11px">⭐ ${r.rating}</div>`;
-      if(r.formatted_phone_number) html+=`<div style="font-size:11px">📞 ${r.formatted_phone_number}</div>`;
-      html+=`<a class="popup-nav-btn" href="${gmapSearchUrl(name)}" target="_blank">📍 Google Maps</a>`;
-      html+=` <button class="popup-add-btn" onclick="addPoiToItinerary('${name.replace(/'/g,"\\'")}',${latLng.lat()},${latLng.lng()},'${(r.formatted_phone_number||'').replace(/'/g,"\\'")}')">+ 加入行程</button>`;
-      gInfoWindow.setContent(html);
+      const eName=name.replace(/'/g,"\\'");
+      let h='<div class="poi-card">';
+
+      // Photos
+      if(r.photos&&r.photos.length){
+        h+='<div class="poi-photos">';
+        r.photos.slice(0,3).forEach(p=>{
+          h+=`<img src="/api/places/photo?ref=${encodeURIComponent(p.photo_reference)}&w=300" alt="photo" loading="lazy">`;
+        });
+        h+='</div>';
+      }
+
+      // Name + rating
+      h+=`<div class="popup-title">${name}</div>`;
+      if(r.rating){
+        h+=`<div class="poi-meta"><span style="color:#fbbc04">${poiStars(r.rating)}</span> ${r.rating}`;
+        if(r.user_ratings_total) h+=` (${r.user_ratings_total})`;
+        h+=` ${poiPrice(r.price_level)}</div>`;
+      }
+
+      // Type tags
+      if(r.types&&r.types.length){
+        const tags=r.types.filter(t=>POI_TYPE_ZH[t]).slice(0,4);
+        if(tags.length){
+          h+='<div class="poi-tags">';
+          tags.forEach(t=>{h+=`<span>${POI_TYPE_ZH[t]}</span>`;});
+          h+='</div>';
+        }
+      }
+
+      // Address
+      if(r.formatted_address) h+=`<div class="poi-meta">${r.formatted_address}</div>`;
+
+      // Opening hours
+      if(r.opening_hours){
+        const oh=r.opening_hours;
+        const today=new Date().getDay();
+        const todayText=oh.weekday_text&&oh.weekday_text[today===0?6:today-1];
+        h+=`<div class="poi-meta">${oh.open_now?'<b style="color:#0d8043">営業中</b>':'<b style="color:#d93025">営業時間外</b>'}`;
+        if(oh.weekday_text){
+          h+=` <button class="poi-hours-toggle" onclick="this.nextElementSibling.classList.toggle('open')">時間を表示</button>`;
+          h+=`<div class="poi-hours-full">${oh.weekday_text.join('\n')}</div>`;
+        }
+        h+='</div>';
+      }
+
+      // Phone + website
+      if(r.formatted_phone_number) h+=`<div class="poi-meta">📞 ${r.formatted_phone_number}</div>`;
+      if(r.website) h+=`<div class="poi-meta"><a href="${r.website}" target="_blank" style="color:#1a73e8">🌐 ウェブサイト</a></div>`;
+
+      // Reviews
+      if(r.reviews&&r.reviews.length){
+        r.reviews.slice(0,2).forEach(rv=>{
+          h+=`<div class="poi-review"><span class="author">${rv.author_name||''}</span> <span class="stars">${poiStars(rv.rating)}</span><div class="text">${rv.text||''}</div></div>`;
+        });
+      }
+
+      // Actions
+      h+=`<div class="poi-actions">`;
+      h+=`<a class="popup-nav-btn" href="${gmapSearchUrl(name)}" target="_blank">📍 Google Maps</a>`;
+      h+=` <button class="popup-add-btn" onclick="addPoiToItinerary('${eName}',${latLng.lat()},${latLng.lng()},'${(r.formatted_phone_number||'').replace(/'/g,"\\'")}')">+ 加入行程</button>`;
+      h+='</div></div>';
+
+      gInfoWindow.setContent(h);
       gInfoWindow.setPosition(latLng);
       gInfoWindow.open(googleMap);
     }).catch(()=>{});

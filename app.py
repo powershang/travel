@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask, send_from_directory, request, jsonify
+from flask import Flask, send_from_directory, request, jsonify, Response
 import os, math, requests, json
 
 app = Flask(__name__, static_folder='static')
@@ -61,9 +61,21 @@ def places_details():
         return jsonify({'result': {}})
     r = requests.get('https://maps.googleapis.com/maps/api/place/details/json', params={
         'place_id': pid, 'key': GOOGLE_API_KEY, 'language': 'ja',
-        'fields': 'name,geometry,formatted_phone_number,rating,formatted_address'
+        'fields': 'name,geometry,formatted_phone_number,rating,user_ratings_total,formatted_address,opening_hours,website,price_level,types,reviews,photos'
     }, timeout=5)
     return jsonify(r.json())
+
+@app.route('/api/places/photo')
+def places_photo():
+    ref = request.args.get('ref', '')
+    w = request.args.get('w', '400')
+    if not ref or not GOOGLE_API_KEY:
+        return Response('', status=404)
+    r = requests.get('https://maps.googleapis.com/maps/api/place/photo', params={
+        'photoreference': ref, 'maxwidth': w, 'key': GOOGLE_API_KEY
+    }, timeout=10, stream=True)
+    return Response(r.content, content_type=r.headers.get('Content-Type', 'image/jpeg'),
+                    headers={'Cache-Control': 'public, max-age=86400'})
 
 # --- Distance (Haversine x 1.3) ---
 @app.route('/api/distance', methods=['POST'])
