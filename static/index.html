@@ -241,9 +241,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .res-status.walkin{background:#e3f2fd;border-color:#64b5f6;color:#1565c0}
 .res-card.rejected{opacity:.45}
 .res-card.rejected .res-name{text-decoration:line-through}
+
+/* Fallback banner */
+#fallback-banner{position:fixed;bottom:calc(var(--tab-h) + var(--safe-bottom));left:0;right:0;background:#e65100;color:#fff;text-align:center;font-size:12px;font-weight:600;padding:5px 12px;z-index:99;display:none}
+body.fallback-mode #fallback-banner{display:block}
+body.fallback-mode .content{height:calc(100dvh - var(--tab-h) - var(--safe-bottom) - 30px)}
 </style>
 </head>
 <body>
+<div id="fallback-banner">⚠️ 資料庫連線失敗，目前顯示預設版本（修改不會儲存）</div>
 <div class="content">
   <div id="itinerary-page" class="page active">
     <div class="header">
@@ -912,28 +918,40 @@ function loadGoogleMapsApi(){
 }
 
 // === INIT ===
+function showFallbackBanner(){
+  document.body.classList.add('fallback-mode');
+}
 async function init(){
-  // Load from DB
+  // Load from DB — distinguish error (DB broken) vs null (DB empty/first run)
+  const safeFetch = url => fetch(url).then(async r=>{
+    const data = await r.json();
+    return r.ok ? data : {_dbError: true};
+  }).catch(()=>({_dbError: true}));
+  let dbFailed = false;
   try {
     const [plansRes, resRes, orderRes] = await Promise.all([
-      fetch('/api/data/trip_plans').then(r=>r.json()).catch(()=>null),
-      fetch('/api/data/resStatus').then(r=>r.json()).catch(()=>null),
-      fetch('/api/data/resOrder').then(r=>r.json()).catch(()=>null)
+      safeFetch('/api/data/trip_plans'),
+      safeFetch('/api/data/resStatus'),
+      safeFetch('/api/data/resOrder')
     ]);
     if(plansRes && plansRes.plans){
       _plansCache=plansRes;
+    } else if(plansRes && plansRes._dbError){
+      _plansCache=defaultPlans();
+      dbFailed=true;
     } else {
-      // DB empty → upload default to DB
+      // DB working but empty → seed with defaults
       _plansCache=defaultPlans();
       fetch('/api/data/trip_plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_plansCache)}).catch(()=>{});
     }
-    if(resRes && typeof resRes==='object' && !resRes.error){
+    if(resRes && typeof resRes==='object' && !resRes._dbError){
       resStatusMap=resRes;
-    } else {
-      fetch('/api/data/resStatus',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(resStatusMap)}).catch(()=>{});
+    } else if(!resRes || !resRes._dbError){
+      if(!dbFailed) fetch('/api/data/resStatus',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(resStatusMap)}).catch(()=>{});
     }
     resOrder=Array.isArray(orderRes)&&orderRes.length===reservations.length?orderRes:reservations.map((_,i)=>i);
-  } catch(e){ /* offline or no DB — use default */ }
+  } catch(e){ dbFailed=true; }
+  if(dbFailed) showFallbackBanner();
   const today=new Date().toISOString().slice(0,10);
   const idx=TRIP_DATES.indexOf(today);
   if(idx>=0) currentDay=idx;
