@@ -7,7 +7,7 @@ import os, math, requests, json
 app = Flask(__name__, static_folder='static')
 
 GOOGLE_API_KEY = os.environ.get('GOOGLE_PLACES_API_KEY', '')
-DATABASE_URL = os.environ.get('DATABASE_URL', '')
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
 
 def get_db():
     import psycopg2
