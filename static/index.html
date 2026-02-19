@@ -1261,7 +1261,7 @@ function renderItinerary(){
     html+=`<div class="card-time">${item.time}</div><div class="card-icon ${item.type}">${item.icon}</div>`;
     const numTag=hasMap?`<span style="color:var(--text2);font-size:11px;margin-right:4px">${mapIdx}.</span>`:'';
     html+=`<div class="card-info"><div class="card-name">${numTag}${item.name}</div>`;
-    html+=`<div class="card-sub">${item.duration?'⏱'+item.duration:''}${item.duration&&item.type?' · ':''}${getTypeLabel(item.type)}</div></div>`;
+    {const nd=['spot','restaurant','snack'].includes(item.type);const ds=item.duration?`⏱${item.duration}`:nd?`<span style="color:#ff9800;font-weight:600">⏱ 未填</span>`:'';html+=`<div class="card-sub">${ds}${ds&&item.type?' · ':''}${getTypeLabel(item.type)}</div></div>`;}
     html+=`<div class="card-arrow">›</div></div>`;
     if(item.note||item.phone||item.tabelog||item.coords){
       html+=`<div class="card-detail" id="detail-${idx}">`;
