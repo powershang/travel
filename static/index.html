@@ -223,6 +223,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .food-tag.day{background:var(--pink-light);color:var(--pink-dark)}.food-tag.price{background:#e8f5e9;color:#2e7d32}.food-tag.rating{background:#fff3e0;color:#e65100}
 
 .res-card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.res-group{border:1.5px solid #f8bbd0;border-radius:14px;padding:10px 10px 2px;margin-bottom:12px}
+.res-group-header{font-size:12px;font-weight:600;color:var(--pink);margin-bottom:8px;padding-bottom:6px;border-bottom:1px dashed #f8bbd0}
+.res-group .res-card{box-shadow:none;border:1px solid #eee;margin-bottom:8px;cursor:grab;user-select:none}
+.res-group .res-card.dragging{opacity:.35;border:2px dashed var(--pink)!important}
+.res-group .res-card.drag-over{border-top:3px solid var(--pink)!important}
+.res-alt-badge{display:inline-block;font-size:10px;font-weight:700;color:#fff;background:var(--pink);border-radius:8px;padding:1px 6px;margin-right:5px;vertical-align:middle}
+.res-drag-handle{font-size:14px;color:#ccc;margin-right:6px;cursor:grab;vertical-align:middle;letter-spacing:-1px}
 .res-header{display:flex;justify-content:space-between;align-items:flex-start}
 .res-name{font-size:15px;font-weight:600}
 .res-date{font-size:11px;font-weight:600;color:#fff;background:var(--pink);padding:3px 10px;border-radius:12px;white-space:nowrap}
@@ -230,6 +237,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
 .res-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
 .res-status{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:18px;font-size:11px;font-weight:500;border:1.5px solid #ddd;background:#fff;cursor:pointer;transition:.2s}
 .res-status.confirmed{background:#e8f5e9;border-color:#4caf50;color:#2e7d32}
+.res-status.rejected{background:#ffebee;border-color:#e57373;color:#c62828}
+.res-status.walkin{background:#e3f2fd;border-color:#64b5f6;color:#1565c0}
+.res-card.rejected{opacity:.45}
+.res-card.rejected .res-name{text-decoration:line-through}
 </style>
 </head>
 <body>
@@ -268,7 +279,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;b
     </div>
   </div>
   <div id="res-page" class="page">
-    <div class="header"><div><h1>餐廳預約</h1><div class="subtitle">6 間餐廳預約資訊</div></div></div>
+    <div class="header"><div><h1>餐廳預約</h1><div class="subtitle">8 間餐廳預約資訊</div></div><button class="header-btn" onclick="copyVisaFormat()" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📋 複製 visa 格式</button></div>
     <div class="page-scroll" id="resScroll"></div>
   </div>
 </div>
@@ -413,6 +424,8 @@ const foods=[
 
 const reservations=[
   {name:'佐賀牛レストラン季楽 本店',zh:'佐賀牛鐵板燒餐廳 季楽',date:'2/26 (四)',time:'18:00',phone:'0952-28-4132',tabelog:'https://tabelog.com/saga/A4101/A410101/41000012/',cuisine:'佐賀牛鐵板燒/涮涮鍋',price:'¥8,000~¥14,999',pax:'2大2小(3歲、1歲)',note:'禁菸・有個室\n百名店2024',coords:[33.26159,130.30333]},
+  {name:'焼鳥かど屋 佐賀駅北口店',zh:'燒鳥角屋 佐賀駅北口店',date:'2/26 (四)',time:'18:00',phone:'0952-37-1330',tabelog:'https://tabelog.com/saga/A4101/A410101/41000155/',cuisine:'焼き鳥/居酒屋',price:'¥3,000~¥3,999',pax:'2大2小(3歲、1歲)',note:'禁菸・有個室(6間)\n乳児可・駅北口1分・不定休',coords:[33.2717,130.2997]},
+  {name:'酒と飯 豆たん',zh:'酒と飯 豆たん',date:'2/26 (四)',time:'18:00',phone:'0952-37-3381',tabelog:'https://tabelog.com/saga/A4101/A410101/41006933/',cuisine:'煮串/佐賀牛/海鮮',price:'¥3,000~¥3,999',pax:'2大2小(3歲、1歲)',note:'禁菸・有個室(6間)\n乳児可・駅南口4分・週日休',coords:[33.2670,130.3018]},
   {name:'いかの活造り 大和',zh:'活烏賊造り 大和',date:'2/27 (五)',time:'18:00',phone:'0955-82-3643',tabelog:'https://tabelog.com/saga/A4102/A410201/41000157/',cuisine:'活烏賊刺身/海鮮',price:'¥3,000~¥3,999',pax:'2大2小(3歲、1歲)',note:'禁菸・請先確認烏賊供應\n（天候/漁獲影響）',coords:[33.52847,129.87946]},
   {name:'鷹鮨 (Taka Zushi)',zh:'鷹鮨',date:'2/28 (六)',time:'18:00',phone:'0954-43-3210',tabelog:'https://tabelog.com/saga/A4104/A410401/41002823/',cuisine:'壽司/海鮮',price:'¥5,000~¥5,999',pax:'2大2小(3歲、1歲)',note:'禁菸・榻榻米個室4人\n僅7座位・務必預約\n週三休',coords:[33.09796,129.98412]},
   {name:'PIZZERIA MONTE STELLA',zh:'蒙特斯特拉窯烤披薩',date:'3/1 (日)',time:'18:00',phone:'0954-20-2020',tabelog:'https://tabelog.com/saga/A4104/A410401/41006437/',cuisine:'拿坡里窯烤披薩',price:'¥3,000~¥3,999',pax:'2大2小(3歲、1歲)',note:'禁菸・兒童可\n主廚赴義學藝',coords:[33.09752,129.98103]},
@@ -425,6 +438,7 @@ let currentDay=0, currentPage='itinerary-page', googleMap=null, mapMarkers=[], m
 let foodMap=null, foodMarkers=[];
 let gInfoWindow=null, foodInfoWindow=null;
 let resStatusMap={};
+let resOrder=[];
 let editMode=false;
 let editingIdx=-1; // -1 = new item
 let editingCoords=null;
@@ -901,9 +915,10 @@ function loadGoogleMapsApi(){
 async function init(){
   // Load from DB
   try {
-    const [plansRes, resRes] = await Promise.all([
+    const [plansRes, resRes, orderRes] = await Promise.all([
       fetch('/api/data/trip_plans').then(r=>r.json()).catch(()=>null),
-      fetch('/api/data/resStatus').then(r=>r.json()).catch(()=>null)
+      fetch('/api/data/resStatus').then(r=>r.json()).catch(()=>null),
+      fetch('/api/data/resOrder').then(r=>r.json()).catch(()=>null)
     ]);
     if(plansRes && plansRes.plans){
       _plansCache=plansRes;
@@ -917,6 +932,7 @@ async function init(){
     } else {
       fetch('/api/data/resStatus',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(resStatusMap)}).catch(()=>{});
     }
+    resOrder=Array.isArray(orderRes)&&orderRes.length===reservations.length?orderRes:reservations.map((_,i)=>i);
   } catch(e){ /* offline or no DB — use default */ }
   const today=new Date().toISOString().slice(0,10);
   const idx=TRIP_DATES.indexOf(today);
@@ -931,7 +947,7 @@ function renderDayChips(){
   const el=document.getElementById('dayChips');
   let html=`<button class="day-chip${currentDay===-1?' active':''}" data-day="-1">ALL 總覽</button>`;
   html+=TRIP_DATES.map((d,i)=>{
-    const dt=new Date(d+'T00:00:00+09:00');
+    const dt=new Date(d+'T12:00:00+09:00');
     const wd=['日','一','二','三','四','五','六'][dt.getDay()];
     return `<button class="day-chip${i===currentDay?' active':''}" data-day="${i}">${DAY_SHORT[i]} ${dt.getMonth()+1}/${dt.getDate()}(${wd})</button>`;
   }).join('');
@@ -1358,25 +1374,88 @@ function highlightFoodCard(idx){
 }
 
 // === RESERVATIONS ===
+function _buildResGroups(){
+  if(!resOrder.length) resOrder=reservations.map((_,i)=>i);
+  const groups=[];
+  resOrder.forEach(i=>{
+    const r=reservations[i], k=r.date+'|'+r.time;
+    const g=groups.find(g=>g.key===k);
+    if(g) g.items.push({r,i}); else groups.push({key:k,items:[{r,i}]});
+  });
+  return groups;
+}
 function renderReservations(){
   const s=document.getElementById('resScroll');
   let h='<div class="section-title">預約人：Wu Tsung Hsuan ・ +886-981053092</div>';
-  reservations.forEach((r,i)=>{
-    const cf=resStatusMap[i];
-    h+=`<div class="res-card"><div class="res-header"><div><div class="res-name">${r.zh||r.name}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${r.name}</div></div>`;
-    h+=`<div class="res-date">${r.date} ${r.time}</div></div>`;
-    h+=`<div class="res-info">🍽 ${r.cuisine}<br>💰 ${r.price}<br>👥 ${r.pax}<br>📝 ${r.note.replace(/\n/g,'<br>')}</div>`;
-    h+=`<div class="res-actions"><a class="btn btn-call" href="tel:${r.phone}">📞 ${r.phone}</a>`;
-    if(r.coords) h+=`<a class="btn btn-nav" href="${gmapSearchUrl(r.name,r.coords)}" target="_blank">📍 Google Maps</a>`;
-    if(r.tabelog) h+=`<a class="btn btn-link" href="${r.tabelog}" target="_blank">⭐ Tabelog</a>`;
-    h+=`<button class="res-status${cf?' confirmed':''}" onclick="toggleResStatus(${i},this)">${cf?'✅ 已確認':'⬜ 待確認'}</button></div></div>`;
+  const altLabels=['A','B','C','D','E'];
+  _buildResGroups().forEach(g=>{
+    const isGroup=g.items.length>1;
+    if(isGroup){
+      const {r}=g.items[0];
+      h+=`<div class="res-group"><div class="res-group-header">📅 ${r.date} ${r.time} &nbsp;·&nbsp; 備選方案（拖曳可調整順序）</div>`;
+    }
+    g.items.forEach(({r,i},gi)=>{
+      const cf=resStatusMap[i];
+      const isRejected=cf==='x', isConfirmed=cf===true, isWalkin=cf==='w';
+      const statusCls=isConfirmed?' confirmed':isRejected?' rejected':isWalkin?' walkin':'';
+      const statusLabel=isConfirmed?'✅ 已確認':isRejected?'❌ 無法預約':isWalkin?'🚶 現場排':'⬜ 待確認';
+      const badge=isGroup?`<span class="res-alt-badge">${altLabels[gi]}</span>`:'';
+      const dragAttrs=isGroup?`draggable="true" ondragstart="resDragStart(event,${i})" ondragover="resDragOver(event)" ondrop="resDrop(event,${i})" ondragleave="resDragLeave(event)" ondragend="resDragEnd(event)"`:'';
+      const handle=isGroup?`<span class="res-drag-handle">⠿</span>`:'';
+      h+=`<div class="res-card${isRejected?' rejected':''}" ${dragAttrs}><div class="res-header"><div><div class="res-name">${handle}${badge}${r.zh||r.name}</div><div style="font-size:11px;color:var(--text2);margin-top:2px">${r.name}</div></div>`;
+      if(!isGroup) h+=`<div class="res-date">${r.date} ${r.time}</div>`;
+      h+=`</div><div class="res-info">🍽 ${r.cuisine}<br>💰 ${r.price}<br>👥 ${r.pax}<br>📝 ${r.note.replace(/\n/g,'<br>')}</div>`;
+      h+=`<div class="res-actions"><a class="btn btn-call" href="tel:${r.phone}">📞 ${r.phone}</a>`;
+      if(r.coords) h+=`<a class="btn btn-nav" href="${gmapSearchUrl(r.name,r.coords)}" target="_blank">📍 Google Maps</a>`;
+      if(r.tabelog) h+=`<a class="btn btn-link" href="${r.tabelog}" target="_blank">⭐ Tabelog</a>`;
+      h+=`<button class="res-status${statusCls}" onclick="toggleResStatus(${i})">${statusLabel}</button></div></div>`;
+    });
+    if(isGroup) h+=`</div>`;
   });
   s.innerHTML=h;
 }
-function toggleResStatus(i,b){
-  resStatusMap[i]=!resStatusMap[i];
+let _dragSrc=null;
+function resDragStart(e,i){_dragSrc=i;setTimeout(()=>e.target.classList.add('dragging'),0);}
+function resDragOver(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
+function resDragLeave(e){e.currentTarget.classList.remove('drag-over');}
+function resDragEnd(e){_dragSrc=null;document.querySelectorAll('.res-card').forEach(c=>c.classList.remove('dragging','drag-over'));}
+function resDrop(e,targetI){
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if(_dragSrc===null||_dragSrc===targetI) return;
+  const sr=reservations[_dragSrc], tr=reservations[targetI];
+  if(sr.date+'|'+sr.time!==tr.date+'|'+tr.time) return;
+  const sp=resOrder.indexOf(_dragSrc), tp=resOrder.indexOf(targetI);
+  [resOrder[sp],resOrder[tp]]=[resOrder[tp],resOrder[sp]];
+  fetch('/api/data/resOrder',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(resOrder)}).catch(()=>{});
+  renderReservations();
+}
+function copyVisaFormat(){
+  let num=0;
+  const parts=[];
+  _buildResGroups().forEach(g=>{
+    const pending=g.items.filter(({i})=>resStatusMap[i]!=='x'&&resStatusMap[i]!==true&&resStatusMap[i]!=='w');
+    if(!pending.length) return;
+    if(g.items.length>1&&pending.length>1){const dateOnly=pending[0].r.date.replace(/\s*[\(（].*?[\)）]/,'').trim();parts.push(`【${dateOnly} ${pending[0].r.time.replace(' 午餐','').replace(' 晚餐','')} 有 ${pending.length} 間備選餐廳，請依序進行訂位！】`);}
+    pending.forEach(({r})=>{
+      const dateOnly=r.date.replace(/\s*[\(（].*?[\)）]/,'').trim();
+      parts.push([`${++num}`,`  ${r.name}`,`  ${r.phone}`,`  預約日期: ${dateOnly}`,`  預約時間: ${r.time.replace(' 午餐','').replace(' 晚餐','')}`,`  預約人數: ${r.pax}`,`  座位: 禁菸`,`  預約大名: Wu Tsung Hsuan`,`  預約電話: +886-981053092`].join('\n'));
+    });
+  });
+  const text=parts.join('\n\n');
+  navigator.clipboard.writeText(text).then(()=>{
+    showToastMsg('✅ 已複製 visa 格式到剪貼簿');
+  }).catch(()=>{
+    const ta=document.createElement('textarea');
+    ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    showToastMsg('✅ 已複製 visa 格式到剪貼簿');
+  });
+}
+function toggleResStatus(i){
+  const cur=resStatusMap[i];
+  resStatusMap[i]=cur===undefined||cur===null||cur===false?true:cur===true?'x':cur==='x'?'w':undefined;
   fetch('/api/data/resStatus',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(resStatusMap)}).catch(()=>{});
-  b.classList.toggle('confirmed');b.textContent=resStatusMap[i]?'✅ 已確認':'⬜ 待確認';
+  renderReservations();
 }
 
 // === TABS ===
