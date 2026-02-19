@@ -1238,7 +1238,23 @@ function renderItinerary(){
     const hasMap=item.coords&&item.coords[0]>30;
     if(hasMap) mapIdx++;
     const isNow=isToday&&isCurrentItem(items,idx,now.timeMin);
-    if(item.drive) html+=`<div class="drive-info">🚗 ${item.drive}</div>`;
+    {
+      const driveMin=extractMins(item.drive);
+      let dInfo=item.drive?`🚗 ${item.drive}`:'';
+      if(idx>0){
+        const prev=items[idx-1];
+        if(prev.duration){
+          const expMin=parseTime(prev.time)+extractMins(prev.duration)+driveMin;
+          const actMin=parseTime(item.time);
+          const gap=actMin-expMin;
+          const eh=Math.floor(expMin/60)%24,em=expMin%60;
+          const expStr=`${eh}:${String(em).padStart(2,'0')}`;
+          const [gapStr,gapColor]=gap===0?['✓ 剛好','#43a047']:gap>0?[`+${gap}分`,gap<=15?'#ff9800':'#9e9e9e']:[`${gap}分 ⚠️`,'#e53935'];
+          dInfo+=(dInfo?' · ':'')+`預計 ${expStr}→你填 ${item.time} <span style="color:${gapColor};font-weight:600">${gapStr}</span>`;
+        }
+      }
+      if(dInfo) html+=`<div class="drive-info">${dInfo}</div>`;
+    }
     html+=`<div class="card${isNow?' now':''}" id="card-${idx}" draggable="true" ondragstart="onDragStart(event,${idx})" ondragover="onDragOver(event)" ondrop="onDrop(event,${idx})" ondragend="onDragEnd(event)">`;
     html+=`<div class="card-main" onclick="onCardClick(${idx})">`;
     html+=`<span class="card-drag-handle" ontouchstart="onTouchDragStart(event,${idx})" title="拖曳排序">⠿</span>`;
@@ -1304,6 +1320,7 @@ function onCardClick(idx){
 function getTypeLabel(t){return{spot:'景點',restaurant:'餐廳',hotel:'住宿',transport:'交通',snack:'小吃',airport:'機場'}[t]||''}
 function getNowJST(){const n=new Date(),j=new Date(n.getTime()+(n.getTimezoneOffset()+540)*60000);return{dateStr:j.toISOString().slice(0,10),timeMin:j.getHours()*60+j.getMinutes()}}
 function parseTime(t){const[h,m]=t.split(':').map(Number);return h*60+m}
+function extractMins(s){const m=(s||'').match(/(\d+)/);return m?+m[1]:0}
 function isCurrentItem(items,idx,nowMin){const s=parseTime(items[idx].time),e=idx<items.length-1?parseTime(items[idx+1].time):s+120;return nowMin>=s&&nowMin<e}
 
 // === COUNTDOWN ===
