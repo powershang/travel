@@ -1261,7 +1261,10 @@ function renderItinerary(){
     html+=`<div class="card-time">${item.time}</div><div class="card-icon ${item.type}">${item.icon}</div>`;
     const numTag=hasMap?`<span style="color:var(--text2);font-size:11px;margin-right:4px">${mapIdx}.</span>`:'';
     html+=`<div class="card-info"><div class="card-name">${numTag}${item.name}</div>`;
-    {const nd=['spot','restaurant','snack'].includes(item.type);const ds=item.duration?`⏱${item.duration}`:nd?`<span style="color:#ff9800;font-weight:600">⏱ 未填</span>`:'';html+=`<div class="card-sub">${ds}${ds&&item.type?' · ':''}${getTypeLabel(item.type)}</div></div>`;}
+    {const nd=['spot','restaurant','snack'].includes(item.type);const ds=item.duration?`⏱${item.duration}`:nd?`<span style="color:#ff9800;font-weight:600">⏱ 未填</span>`:'';
+    let resBadge='';
+    if(item.type==='restaurant'){const ri=reservations.findIndex(r=>r.name===item.name);if(ri>=0){const st=resStatusMap[ri];resBadge=st===true?`<span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">✓ 已預約</span>`:st==='w'?`<span style="background:#e3f2fd;color:#1565c0;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">現場排</span>`:st==='x'?`<span style="background:#ffebee;color:#c62828;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">✗ 無法預約</span>`:'';}}
+    html+=`<div class="card-sub">${resBadge}${resBadge&&(ds||item.type)?' · ':''}${ds}${ds&&item.type?' · ':''}${getTypeLabel(item.type)}</div></div>`;}
     html+=`<div class="card-arrow">›</div></div>`;
     if(item.note||item.phone||item.tabelog||item.coords){
       html+=`<div class="card-detail" id="detail-${idx}">`;
@@ -1491,6 +1494,7 @@ function toggleResStatus(i){
   resStatusMap[i]=cur===undefined||cur===null||cur===false?true:cur===true?'x':cur==='x'?'w':undefined;
   fetch('/api/data/resStatus',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(resStatusMap)}).catch(()=>{});
   renderReservations();
+  renderItinerary();
 }
 
 // === TABS ===
