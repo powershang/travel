@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="佐賀旅行">
+<meta name="apple-mobile-web-app-title" content="旅行計畫">
 <meta name="theme-color" content="#F5F0E1">
-<title>2026 佐賀旅行</title>
+<title>旅行計畫</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxODAgMTgwIj48cmVjdCB3aWR0aD0iMTgwIiBoZWlnaHQ9IjE4MCIgcng9IjQwIiBmaWxsPSIjZTkxZTYzIi8+PHRleHQgeD0iOTAiIHk9IjEwNSIgZm9udC1zaXplPSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiPuS9kOizgDwvdGV4dD48dGV4dCB4PSI5MCIgeT0iMTQ1IiBmb250LXNpemU9IjMwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjZmZjY2JjIj7ml4XooYwgMjAyNjwvdGV4dD48L3N2Zz4=">
 <style>
@@ -278,7 +278,7 @@ body.fallback-mode .content{height:calc(100dvh - var(--tab-h) - var(--safe-botto
 <div class="content">
   <div id="itinerary-page" class="page active">
     <div class="header">
-      <div><h1>2026 佐賀旅行</h1><div class="subtitle">2/26 (四) ~ 3/3 (二) ・ 6天5夜 ｜ <span id="activePlanLabel" style="cursor:pointer;text-decoration:underline;opacity:1" onclick="openPlanModal()"></span></div></div>
+      <div><h1 id="appTitle">旅行計畫</h1><div class="subtitle"><span id="appSubtitle"></span> ｜ <span id="activePlanLabel" style="cursor:pointer;text-decoration:underline;opacity:1" onclick="openPlanModal()"></span></div></div>
       <div class="header-btns">
         <!-- AI審查按鈕暫時隱藏 -->
         <button class="header-btn" id="btnAiReview" onclick="aiReview()" title="AI 審查" style="display:none;font-size:12px;width:auto;padding:0 10px;border-radius:17px">🤖 AI審查</button>
@@ -303,7 +303,7 @@ body.fallback-mode .content{height:calc(100dvh - var(--tab-h) - var(--safe-botto
     </div>
   </div>
   <div id="food-page" class="page">
-    <div class="header"><div><h1>美食指南</h1><div class="subtitle">當地特色美食 日文+中文 給店員看</div></div></div>
+    <div class="header"><div><h1>美食指南</h1><div class="subtitle" id="foodSubtitle">當地特色美食</div></div></div>
     <div class="food-body">
       <div id="food-cards-panel"></div>
       <div id="food-map-panel"><div id="food-map-container"></div></div>
@@ -1365,7 +1365,32 @@ function focusMap(lat,lng){
 }
 
 // === ITINERARY CARDS ===
-function updatePlanLabel(){const l=document.getElementById('activePlanLabel');if(l)l.textContent='📋 '+getActivePlan().name}
+function updatePlanLabel(){
+  const plan=getActivePlan();
+  const l=document.getElementById('activePlanLabel');
+  if(l) l.textContent='📋 '+plan.name;
+  // 動態更新標題
+  const titleEl=document.getElementById('appTitle');
+  if(titleEl) titleEl.textContent=plan.name;
+  document.title=plan.name;
+  // 更新副標題：日期範圍
+  const itin=plan.data&&plan.data.itinerary?plan.data.itinerary:{};
+  const dates=Object.keys(itin).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  let subtitle='';
+  if(dates.length>=2){
+    const d0=new Date(dates[0]),d1=new Date(dates[dates.length-1]);
+    const wd=['日','一','二','三','四','五','六'];
+    subtitle=`${d0.getMonth()+1}/${d0.getDate()}(${wd[d0.getDay()]}) ~ ${d1.getMonth()+1}/${d1.getDate()}(${wd[d1.getDay()]}) ・ ${dates.length}天${dates.length-1}夜`;
+  }
+  const subEl=document.getElementById('appSubtitle');
+  if(subEl) subEl.textContent=subtitle;
+  // 更新美食副標題
+  const foodSub=document.getElementById('foodSubtitle');
+  if(foodSub){
+    const isKorea=(plan.id||'').includes('busan');
+    foodSub.textContent=isKorea?'當地特色美食 韓文+中文 給店員看':'當地特色美食 日文+中文 給店員看';
+  }
+}
 function renderItinerary(){
   updatePlanLabel();
   const panel=document.getElementById('cards-panel');
