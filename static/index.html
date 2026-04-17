@@ -644,10 +644,13 @@ function renderPlanList(){
   const archived_plans=plans.plans.filter(p=>p.archived);
   let html=active_plans.map(p=>{
     const active=p.id===plans.activeId;
-    const days=Object.values(p.data).reduce((s,a)=>s+a.length,0);
+    const itin=p.data&&p.data.itinerary?p.data.itinerary:{};
+    const days=Object.values(itin).reduce((s,a)=>s+(Array.isArray(a)?a.length:0),0);
+    const dates=Object.keys(itin).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+    const dateRange=dates.length>=2?`${dates[0].slice(5)} ~ ${dates[dates.length-1].slice(5)}`:(dates[0]||'');
     return `<div class="plan-item${active?' active-plan':''}" onclick="switchPlan('${p.id}')">
       <div class="plan-radio"></div>
-      <div class="plan-name">${p.name}<div style="font-size:11px;color:var(--text2)">${days} 個項目</div></div>
+      <div class="plan-name">${p.name}<div style="font-size:11px;color:var(--text2)">${dateRange} ・ ${days} 個項目</div></div>
       <div class="plan-actions" onclick="event.stopPropagation()">
         <button onclick="renamePlan('${p.id}')" title="重新命名">✏️</button>
         <button onclick="duplicatePlan('${p.id}')" title="複製方案">📋</button>
@@ -659,10 +662,13 @@ function renderPlanList(){
   if(archived_plans.length){
     html+=`<div style="margin:12px 0 6px;font-size:12px;color:#999;border-top:1px solid #eee;padding-top:10px">📦 已封存</div>`;
     html+=archived_plans.map(p=>{
-      const days=Object.values(p.data).reduce((s,a)=>s+a.length,0);
+      const itin2=p.data&&p.data.itinerary?p.data.itinerary:{};
+      const days=Object.values(itin2).reduce((s,a)=>s+(Array.isArray(a)?a.length:0),0);
+      const dates2=Object.keys(itin2).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+      const dateRange2=dates2.length>=2?`${dates2[0].slice(5)} ~ ${dates2[dates2.length-1].slice(5)}`:(dates2[0]||'');
       return `<div class="plan-item archived-plan">
         <div class="plan-radio"></div>
-        <div class="plan-name">${p.name}<div style="font-size:11px;color:var(--text2)">${days} 個項目</div></div>
+        <div class="plan-name">${p.name}<div style="font-size:11px;color:var(--text2)">${dateRange2} ・ ${days} 個項目</div></div>
         <div class="plan-actions" onclick="event.stopPropagation()">
           <button onclick="unarchivePlan('${p.id}')" title="解除封存">📤</button>
           <button onclick="duplicatePlan('${p.id}')" title="複製方案">📋</button>
