@@ -1,0 +1,15 @@
+{
+  "framework": null,
+  "buildCommand": "",
+  "outputDirectory": "public",
+  "regions": ["sin1"],
+  "functions": {
+    "api/**/*.py": {
+      "runtime": "@vercel/python@4.5.1"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/data/batch", "destination": "/api/data/batch" },
+    { "source": "/api/data/:key", "destination": "/api/data/[key]" }
+  ]
+}
