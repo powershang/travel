@@ -1419,8 +1419,12 @@ function renderItinerary(){
     if(hasMap) mapIdx++;
     const isNow=isToday&&isCurrentItem(items,idx,now.timeMin);
     {
-      const driveMin=extractMins(item.drive);
-      let dInfo=item.drive?`🚗 ${item.drive}`:'';
+      // drive 資訊：優先用自己的，若空則看前一張卡（相容兩種資料格式）
+      const selfDrive=item.drive||'';
+      const prevDrive=idx>0?(items[idx-1].drive||''):'';
+      const effectiveDrive=selfDrive||prevDrive;
+      const driveMin=extractMins(effectiveDrive);
+      let dInfo=effectiveDrive?`🚗 ${effectiveDrive}`:'';
       if(idx>0){
         const prev=items[idx-1];
         if(prev.duration){
