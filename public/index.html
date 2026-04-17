@@ -1076,13 +1076,17 @@ function showFallbackBanner(){
   document.body.classList.add('fallback-mode');
 }
 async function init(){
-  let dbFailed = false;
+  // 顯示載入中，避免 cold start 期間閃現錯誤的預設方案
+  const cardsPanel=document.getElementById('cards-panel');
+  if(cardsPanel) cardsPanel.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text2)"><div style="font-size:28px;margin-bottom:12px">⏳</div><div style="font-size:14px">載入行程中...</div></div>';
+
+  let dbFailed=false;
   try {
-    const r = await fetch('/api/data/batch?keys=trip_plans');
+    const r=await fetch('/api/data/batch?keys=trip_plans');
     if(!r.ok) throw new Error('batch failed');
-    const batch = await r.json();
+    const batch=await r.json();
     if(batch._error) throw new Error(batch._error);
-    const plansRes = batch.trip_plans;
+    const plansRes=batch.trip_plans;
     if(plansRes && plansRes.plans){
       // DB has data — use it, migratePlanData handles format upgrade in-place
       _plansCache=plansRes;
@@ -1095,7 +1099,11 @@ async function init(){
       _plansCache=defaultPlans();
       fetch('/api/data/trip_plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(_plansCache)}).catch(()=>{});
     }
-  } catch(e){ dbFailed=true; _plansCache=defaultPlans(); }
+  } catch(e){
+    console.warn('DB load failed, using defaults:', e);
+    dbFailed=true;
+    _plansCache=defaultPlans();
+  }
   if(dbFailed) showFallbackBanner();
   loadActivePlanState();
   const today=new Date().toISOString().slice(0,10);
