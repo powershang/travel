@@ -149,6 +149,21 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 .plan-create-btns button{padding:12px;border-radius:8px;border:1.5px dashed #d0cec9;background:#fff;font-size:13px;cursor:pointer}
 .plan-create-btns button:active{background:var(--bg)}
 
+/* Spot Library */
+.spot-card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid var(--border);box-shadow:var(--shadow-ambient);cursor:grab;transition:all .4s var(--ease-spring);position:relative}
+.spot-card:active{cursor:grabbing}
+.spot-card:hover{box-shadow:var(--shadow-card-hover);transform:translateY(-1px)}
+.spot-card.dragging{opacity:.4;transform:scale(.97)}
+.spot-card.in-itinerary{border-left:3px solid var(--accent);background:linear-gradient(135deg,var(--card) 0%,rgba(107,123,60,.04) 100%)}
+.spot-card .spot-name{font-size:15px;font-weight:700;color:var(--text);letter-spacing:-0.02em}
+.spot-card .spot-meta{font-size:12px;color:var(--text2);margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.spot-card .spot-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500}
+.spot-badge.placed{background:rgba(107,123,60,.12);color:var(--accent);border:1px solid rgba(107,123,60,.2)}
+.spot-badge.unplaced{background:var(--bg);color:var(--text2);border:1px solid var(--border)}
+.spot-card .spot-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.spot-lib-drop-zone{border:2px dashed var(--border);border-radius:14px;padding:32px;text-align:center;color:var(--text2);font-size:13px;margin:8px 0;transition:all .3s}
+.spot-lib-drop-zone.dragover{border-color:var(--pink);background:var(--pink-light);color:var(--pink)}
+
 /* Edit item panel */
 .edit-panel{display:none;position:fixed;inset:0;z-index:250;background:rgba(0,0,0,.4);justify-content:flex-end}
 .edit-panel.open{display:flex}
@@ -313,12 +328,69 @@ body.fallback-mode .content{height:calc(100dvh - var(--tab-h) - var(--safe-botto
     <div class="header"><div><h1>餐廳預約</h1><div class="subtitle">8 間餐廳預約資訊</div></div><button class="header-btn" onclick="copyVisaFormat()" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📋 複製 visa 格式</button></div>
     <div class="page-scroll" id="resScroll"></div>
   </div>
+
+  <!-- 景點庫 page -->
+  <div id="spots-page" class="page">
+    <div class="header">
+      <div><h1>景點庫</h1><div class="subtitle">拖曳景點到行程，或點擊加入指定天</div></div>
+      <div class="header-btns">
+        <button class="header-btn" onclick="openNoteModal()" title="旅遊筆記" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">📝 筆記</button>
+        <button class="header-btn" onclick="openAddSpotModal()" title="新增景點" style="font-size:12px;width:auto;padding:0 10px;border-radius:17px">＋ 新增</button>
+      </div>
+    </div>
+    <div class="page-scroll" id="spotsPanel" ondragover="onSpotLibDragOver(event)" ondrop="onSpotLibDrop(event)"></div>
+  </div>
 </div>
+
 <nav class="tab-bar">
-  <button class="tab-item active" data-page="itinerary-page"><span class="icon">📅</span>行程地圖</button>
+  <button class="tab-item active" data-page="itinerary-page"><span class="icon">📅</span>行程</button>
+  <button class="tab-item" data-page="spots-page"><span class="icon">🗂</span>景點庫</button>
   <button class="tab-item" data-page="food-page"><span class="icon">🍽</span>美食</button>
   <button class="tab-item" data-page="res-page"><span class="icon">📱</span>預約</button>
 </nav>
+
+<!-- 筆記 Modal -->
+<div class="modal-overlay" id="noteModal">
+  <div class="modal-panel">
+    <div class="modal-header"><h2>📝 旅遊筆記</h2><button class="modal-close" onclick="closeNoteModal()">✕</button></div>
+    <div style="padding:0 16px 16px">
+      <textarea id="noteTextarea" placeholder="隨手記下任何事情：待買清單、注意事項、費用記錄..." style="width:100%;min-height:320px;border:1px solid var(--border);border-radius:12px;padding:14px;font-size:14px;line-height:1.7;font-family:inherit;resize:vertical;background:var(--bg);color:var(--text);outline:none;box-sizing:border-box" oninput="onNoteInput()"></textarea>
+      <div style="font-size:11px;color:var(--text2);margin-top:6px;text-align:right" id="noteSaveStatus">自動儲存</div>
+    </div>
+  </div>
+</div>
+
+<!-- 新增景點 Modal -->
+<div class="modal-overlay" id="addSpotModal">
+  <div class="modal-panel">
+    <div class="modal-header"><h2>＋ 新增景點到景點庫</h2><button class="modal-close" onclick="closeAddSpotModal()">✕</button></div>
+    <div style="padding:0 16px 16px;display:flex;flex-direction:column;gap:10px">
+      <div class="edit-field"><label>名稱 *</label><input type="text" id="spName" placeholder="景點名稱"></div>
+      <div class="edit-field"><label>類型</label>
+        <select id="spType">
+          <option value="spot">🏯 景點</option>
+          <option value="restaurant">🍽 餐廳</option>
+          <option value="snack">🍡 小吃</option>
+          <option value="hotel">🏨 住宿</option>
+          <option value="transport">🚗 交通</option>
+        </select>
+      </div>
+      <div class="edit-field"><label>建議停留時間</label><input type="text" id="spDuration" placeholder="例：60分、2hr"></div>
+      <div class="edit-field"><label>備注</label><textarea id="spNote" style="height:80px"></textarea></div>
+      <div class="edit-field"><label>電話</label><input type="text" id="spPhone"></div>
+      <div class="edit-field"><label>地址/位置</label><input type="text" id="spWhere" placeholder="例：海雲台、西面"></div>
+      <button class="btn btn-edit" style="justify-content:center;padding:12px;font-size:14px;margin-top:4px" onclick="saveNewSpot()">＋ 加入景點庫</button>
+    </div>
+  </div>
+</div>
+
+<!-- 景點庫拖到行程：選天 Modal -->
+<div class="modal-overlay" id="spotDayModal">
+  <div class="modal-panel" style="max-height:70vh">
+    <div class="modal-header"><h2>📅 加入哪一天？</h2><button class="modal-close" onclick="closeSpotDayModal()">✕</button></div>
+    <div style="padding:0 16px 16px" id="spotDayList"></div>
+  </div>
+</div>
 
 <!-- Plan Management Modal -->
 <div class="modal-overlay" id="planModal">
@@ -501,7 +573,7 @@ function genId(){return Math.random().toString(36).substr(2,8)}
 let _plansCache=null;
 const FOODS_DEFAULT=JSON.parse(JSON.stringify(foods));
 const RESERVATIONS_DEFAULT=JSON.parse(JSON.stringify(reservations));
-function defaultPlanData(){return {itinerary:JSON.parse(JSON.stringify(ITINERARY_DEFAULT)),foods:JSON.parse(JSON.stringify(FOODS_DEFAULT)),reservations:JSON.parse(JSON.stringify(RESERVATIONS_DEFAULT)),resStatusMap:{},resOrder:[]}}
+function defaultPlanData(){return {itinerary:JSON.parse(JSON.stringify(ITINERARY_DEFAULT)),foods:JSON.parse(JSON.stringify(FOODS_DEFAULT)),reservations:JSON.parse(JSON.stringify(RESERVATIONS_DEFAULT)),resStatusMap:{},resOrder:[],spots:[],notes:''}}
 function defaultPlans(){return {plans:[{id:'default',name:'佐賀原始版',data:defaultPlanData(),createdAt:new Date().toISOString()}],activeId:'default'}}
 function migratePlanData(plan){
   // Migrate old format: plan.data was itinerary directly (has date keys like "2026-02-26")
@@ -512,6 +584,8 @@ function migratePlanData(plan){
   if(!plan.data.reservations) plan.data.reservations=JSON.parse(JSON.stringify(RESERVATIONS_DEFAULT));
   if(!plan.data.resStatusMap) plan.data.resStatusMap={};
   if(!plan.data.resOrder) plan.data.resOrder=[];
+  if(!plan.data.spots) plan.data.spots=[];
+  if(plan.data.notes===undefined) plan.data.notes='';
   return plan;
 }
 function loadPlans(){
@@ -545,13 +619,14 @@ function switchPlan(id){
   // Load new plan state
   loadActivePlanState();
   savePlansData(plans);
-  renderItinerary(); renderMap(); renderFoodPage(); renderReservations(); renderPlanList();
+  renderItinerary(); renderMap(); renderFoodPage(); renderReservations(); renderSpotLibrary(); renderPlanList();
 }
 function saveActivePlanState(){
   const p=getActivePlan();
   if(!p) return;
   p.data.resStatusMap=resStatusMap;
   p.data.resOrder=resOrder;
+  // spots/notes are saved immediately when changed, no need to save here
 }
 function loadActivePlanState(){
   const p=getActivePlan();
@@ -1109,7 +1184,7 @@ async function init(){
   const today=new Date().toISOString().slice(0,10);
   const idx=TRIP_DATES.indexOf(today);
   if(idx>=0) currentDay=idx;
-  renderDayChips(); renderItinerary(); renderFoodPage(); renderReservations(); setupTabs();
+  renderDayChips(); renderItinerary(); renderFoodPage(); renderReservations(); renderSpotLibrary(); setupTabs();
   loadGoogleMapsApi().then(()=>setTimeout(initMap,100)).catch(e=>console.warn('Google Maps load failed',e));
   updateCountdown(); setInterval(updateCountdown,60000);
 }
@@ -1523,6 +1598,223 @@ function updateCountdown(){
   if(ci>=0&&ci<items.length-1){const nx=items[ci+1],diff=parseTime(nx.time)-now.timeMin;if(diff>0&&diff<=180){bar.style.display='flex';bar.innerHTML=`⏳ 下一站 <b>${nx.name}</b>　${diff}分鐘後 (${nx.time})`}else bar.style.display='none'}else bar.style.display='none';
 }
 
+// === SPOT LIBRARY ===
+let _draggingSpotId=null;
+
+function getSpots(){return getActivePlan().data.spots||[];}
+function saveSpots(spots){
+  const plans=loadPlans();
+  const p=plans.plans.find(p=>p.id===plans.activeId);
+  if(p) p.data.spots=spots;
+  savePlansData(plans);
+}
+function genSpotId(){return 'sp_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);}
+
+function renderSpotLibrary(){
+  const panel=document.getElementById('spotsPanel');
+  if(!panel) return;
+  const spots=getSpots();
+  const itin=getActiveItinerary();
+  // Build set of spot IDs currently in itinerary
+  const placedMap={};
+  Object.entries(itin).forEach(([date,items])=>{
+    items.forEach(item=>{
+      if(item.spotId) placedMap[item.spotId]=date;
+    });
+  });
+  const dates=Object.keys(itin).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+
+  if(spots.length===0){
+    panel.innerHTML=`<div style="padding:32px 16px;text-align:center;color:var(--text2)">
+      <div style="font-size:36px;margin-bottom:12px">🗂</div>
+      <div style="font-weight:600;margin-bottom:6px">景點庫是空的</div>
+      <div style="font-size:13px">點右上角「＋ 新增」把景點存入景點庫<br>之後可直接拖到行程任意一天</div>
+    </div>`;
+    return;
+  }
+
+  const typeIcons={spot:'🏯',restaurant:'🍽',snack:'🍡',hotel:'🏨',transport:'🚗',airport:'✈️'};
+  let h='';
+  const unplaced=spots.filter(s=>!placedMap[s.id]);
+  const placed=spots.filter(s=>!!placedMap[s.id]);
+
+  if(unplaced.length){
+    h+=`<div class="section-title" style="padding:12px 16px 4px">📌 待排入行程（${unplaced.length}）</div>`;
+    unplaced.forEach(s=>{
+      h+=renderSpotCard(s,null,dates,typeIcons);
+    });
+  }
+  if(placed.length){
+    h+=`<div class="section-title" style="padding:12px 16px 4px">✅ 已排入行程（${placed.length}）</div>`;
+    placed.forEach(s=>{
+      const dayIdx=dates.indexOf(placedMap[s.id]);
+      const dayLabel=dayIdx>=0?getDayShort(dayIdx)+' '+getDayLabel(dayIdx):placedMap[s.id];
+      h+=renderSpotCard(s,dayLabel,dates,typeIcons);
+    });
+  }
+  panel.innerHTML=h;
+}
+
+function renderSpotCard(s,placedLabel,dates,typeIcons){
+  const icon=typeIcons[s.type]||'📍';
+  const isPlaced=!!placedLabel;
+  let h=`<div class="spot-card${isPlaced?' in-itinerary':''}" id="spotcard-${s.id}"
+    draggable="true"
+    ondragstart="onSpotDragStart(event,'${s.id}')"
+    ondragend="onSpotDragEnd(event)">`;
+  h+=`<div class="spot-name">${icon} ${s.name}</div>`;
+  h+=`<div class="spot-meta">`;
+  if(isPlaced) h+=`<span class="spot-badge placed">✅ ${placedLabel}</span>`;
+  else h+=`<span class="spot-badge unplaced">未排入</span>`;
+  if(s.duration) h+=`<span style="color:var(--text2);font-size:12px">⏱ ${s.duration}</span>`;
+  if(s.where) h+=`<span style="color:var(--text2);font-size:12px">📍 ${s.where}</span>`;
+  h+=`</div>`;
+  if(s.note) h+=`<div style="font-size:12px;color:var(--text2);margin-top:6px;line-height:1.5">${s.note}</div>`;
+  h+=`<div class="spot-actions">`;
+  if(!isPlaced){
+    h+=`<button class="btn" style="font-size:11px;padding:4px 10px" onclick="openSpotDayModal('${s.id}')">📅 加入行程</button>`;
+  } else {
+    h+=`<button class="btn" style="font-size:11px;padding:4px 10px" onclick="removeSpotFromItinerary('${s.id}')">↩ 移回景點庫</button>`;
+  }
+  h+=`<button class="btn btn-del" style="font-size:11px;padding:4px 10px" onclick="deleteSpot('${s.id}')">🗑 刪除</button>`;
+  h+=`</div></div>`;
+  return h;
+}
+
+function onSpotDragStart(e,spotId){
+  _draggingSpotId=spotId;
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/spot-id',spotId);
+  setTimeout(()=>{const el=document.getElementById('spotcard-'+spotId);if(el)el.classList.add('dragging');},0);
+}
+function onSpotDragEnd(e){
+  if(_draggingSpotId){const el=document.getElementById('spotcard-'+_draggingSpotId);if(el)el.classList.remove('dragging');}
+  _draggingSpotId=null;
+}
+function onSpotLibDragOver(e){e.preventDefault();}
+function onSpotLibDrop(e){
+  e.preventDefault();
+  const spotId=e.dataTransfer.getData('text/spot-id')||_draggingSpotId;
+  if(!spotId) return;
+  // Dropping back on library = move from itinerary back to library
+  removeSpotFromItinerary(spotId);
+}
+
+// Called from day-chip drop zone in itinerary
+function onDayChipSpotDrop(e,dayIdx){
+  e.preventDefault();
+  const spotId=e.dataTransfer.getData('text/spot-id')||_draggingSpotId;
+  if(!spotId) return;
+  addSpotToItinerary(spotId,dayIdx);
+}
+
+function addSpotToItinerary(spotId,dayIdx){
+  const spots=getSpots();
+  const spot=spots.find(s=>s.id===spotId);
+  if(!spot) return;
+  const plans=loadPlans();
+  const p=plans.plans.find(p=>p.id===plans.activeId);
+  if(!p) return;
+  const dates=Object.keys(p.data.itinerary).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const date=dates[dayIdx];
+  if(!date) return;
+  // Remove from any other day first
+  dates.forEach(d=>{
+    p.data.itinerary[d]=p.data.itinerary[d].filter(item=>item.spotId!==spotId);
+  });
+  // Build itinerary item from spot
+  const typeIcons={spot:'🏯',restaurant:'🍽',snack:'🍡',hotel:'🏨',transport:'🚗'};
+  const newItem={
+    time:'09:00',name:spot.name,type:spot.type||'spot',
+    icon:typeIcons[spot.type]||'📍',
+    duration:spot.duration||'',note:spot.note||'',
+    phone:spot.phone||'',coords:spot.coords||null,
+    spotId:spotId  // keep reference back to library
+  };
+  p.data.itinerary[date].push(newItem);
+  savePlansData(plans);
+  renderItinerary(); renderMap(); renderSpotLibrary();
+}
+
+function removeSpotFromItinerary(spotId){
+  const plans=loadPlans();
+  const p=plans.plans.find(p=>p.id===plans.activeId);
+  if(!p) return;
+  const dates=Object.keys(p.data.itinerary).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  let removed=false;
+  dates.forEach(d=>{
+    const before=p.data.itinerary[d].length;
+    p.data.itinerary[d]=p.data.itinerary[d].filter(item=>item.spotId!==spotId);
+    if(p.data.itinerary[d].length<before) removed=true;
+  });
+  if(removed){savePlansData(plans);renderItinerary();renderMap();}
+  renderSpotLibrary();
+}
+
+function deleteSpot(spotId){
+  if(!confirm('確定從景點庫刪除這個景點？（也會從行程中移除）')) return;
+  removeSpotFromItinerary(spotId);
+  const spots=getSpots().filter(s=>s.id!==spotId);
+  saveSpots(spots);
+  renderSpotLibrary();
+}
+
+function openSpotDayModal(spotId){
+  const dates=Object.keys(getActiveItinerary()).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const list=document.getElementById('spotDayList');
+  list.innerHTML=dates.map((d,i)=>`
+    <button onclick="addSpotToItinerary('${spotId}',${i});closeSpotDayModal()" style="width:100%;text-align:left;padding:14px;margin-bottom:6px;border-radius:12px;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:14px;font-family:inherit">
+      <b>${getDayShort(i)} ${getDayLabel(i)}</b><span style="color:var(--text2);font-size:12px;margin-left:8px">${d.slice(5)}</span>
+    </button>`).join('');
+  document.getElementById('spotDayModal').classList.add('open');
+}
+function closeSpotDayModal(){document.getElementById('spotDayModal').classList.remove('open');}
+
+function openAddSpotModal(){
+  ['spName','spDuration','spNote','spPhone','spWhere'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('spType').value='spot';
+  document.getElementById('addSpotModal').classList.add('open');
+}
+function closeAddSpotModal(){document.getElementById('addSpotModal').classList.remove('open');}
+function saveNewSpot(){
+  const name=document.getElementById('spName').value.trim();
+  if(!name){alert('請輸入景點名稱');return;}
+  const spot={
+    id:genSpotId(),name,
+    type:document.getElementById('spType').value,
+    duration:document.getElementById('spDuration').value.trim(),
+    note:document.getElementById('spNote').value.trim(),
+    phone:document.getElementById('spPhone').value.trim(),
+    where:document.getElementById('spWhere').value.trim(),
+    createdAt:new Date().toISOString()
+  };
+  const spots=getSpots();
+  spots.push(spot);
+  saveSpots(spots);
+  closeAddSpotModal();
+  renderSpotLibrary();
+}
+
+// === NOTES ===
+let _noteTimer=null;
+function openNoteModal(){
+  const note=getActivePlan().data.notes||'';
+  document.getElementById('noteTextarea').value=note;
+  document.getElementById('noteSaveStatus').textContent='自動儲存';
+  document.getElementById('noteModal').classList.add('open');
+}
+function closeNoteModal(){document.getElementById('noteModal').classList.remove('open');}
+function onNoteInput(){
+  document.getElementById('noteSaveStatus').textContent='儲存中...';
+  clearTimeout(_noteTimer);
+  _noteTimer=setTimeout(()=>{
+    const plans=loadPlans();
+    const p=plans.plans.find(p=>p.id===plans.activeId);
+    if(p){p.data.notes=document.getElementById('noteTextarea').value;savePlansData(plans);}
+    document.getElementById('noteSaveStatus').textContent='✓ 已儲存';
+  },800);
+}
+
 // === FOOD PAGE ===
 function renderFoodPage(){
   const s=document.getElementById('food-cards-panel');
@@ -1747,6 +2039,7 @@ function setupTabs(){
       document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===page));
       if(page==='itinerary-page'&&googleMap) setTimeout(()=>{google.maps.event.trigger(googleMap,'resize');renderMap()},100);
       if(page==='food-page') setTimeout(()=>{if(!foodMap) initFoodMap(); else google.maps.event.trigger(foodMap,'resize');},100);
+      if(page==='spots-page') renderSpotLibrary();
     };
   });
 }
