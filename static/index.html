@@ -149,6 +149,21 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 .plan-create-btns button{padding:12px;border-radius:8px;border:1.5px dashed #d0cec9;background:#fff;font-size:13px;cursor:pointer}
 .plan-create-btns button:active{background:var(--bg)}
 
+/* Multi-day Kanban */
+.multi-day-container{display:flex;gap:12px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px;min-height:60vh}
+.multi-day-column{flex:0 0 280px;background:var(--bg);border-radius:14px;border:1px solid var(--border);display:flex;flex-direction:column;max-height:calc(100vh - 200px);overflow:hidden}
+.multi-day-column.dragover{border-color:var(--pink);box-shadow:0 0 0 2px var(--pink-light)}
+.multi-day-header{padding:10px 12px;font-weight:700;font-size:13px;border-bottom:1px solid var(--border);background:var(--card);border-radius:14px 14px 0 0;position:sticky;top:0;z-index:1}
+.multi-day-cards{flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:60px}
+.multi-day-cards .card{margin-bottom:0;font-size:12px}
+.day-chip.multi-selected{background:var(--accent);color:#fff;border-color:var(--accent)}
+.day-chip.multi-btn{background:transparent;border-style:dashed;color:var(--text2)}
+.day-chip.multi-btn.multi-active{background:var(--accent);color:#fff;border-style:solid;border-color:var(--accent)}
+@media(max-width:768px){
+  .multi-day-container{flex-direction:column;overflow-x:hidden}
+  .multi-day-column{flex:0 0 auto;max-height:none}
+}
+
 /* Spot Library */
 .spot-card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:10px;border:1px solid var(--border);box-shadow:var(--shadow-ambient);cursor:grab;transition:all .4s var(--ease-spring);position:relative}
 .spot-card:active{cursor:grabbing}
@@ -558,6 +573,7 @@ let gInfoWindow=null, foodInfoWindow=null;
 let resStatusMap={};
 let resOrder=[];
 let editMode=false;
+let multiDays=null; // null=single day mode, [0,2]=multi-day mode showing Day1+Day3
 let editingIdx=-1; // -1 = new item
 let editingCoords=null;
 let placesTimeout=null;
@@ -1192,19 +1208,55 @@ async function init(){
 // === DAY CHIPS ===
 function renderDayChips(){
   const el=document.getElementById('dayChips');
-  let html=`<button class="day-chip${currentDay===-1?' active':''}" data-day="-1">ALL 總覽</button>`;
+  let html=`<button class="day-chip${currentDay===-1&&!multiDays?' active':''}" data-day="-1">ALL 總覽</button>`;
   html+=TRIP_DATES.map((d,i)=>{
     const dt=new Date(d+'T12:00:00+09:00');
     const wd=['日','一','二','三','四','五','六'][dt.getDay()];
-    return `<button class="day-chip${i===currentDay?' active':''}" data-day="${i}">${getDayShort(i)} ${dt.getMonth()+1}/${dt.getDate()}(${wd})</button>`;
+    const isActive=!multiDays&&i===currentDay;
+    const isMulti=multiDays&&multiDays.includes(i);
+    return `<button class="day-chip${isActive?' active':''}${isMulti?' multi-selected':''}" data-day="${i}">${getDayShort(i)} ${dt.getMonth()+1}/${dt.getDate()}(${wd})</button>`;
   }).join('');
+  // Multi-day toggle button
+  html+=`<button class="day-chip multi-btn${multiDays?' multi-active':''}" data-day="multi" title="多天模式：可同時選多天並排比較">⊞ 多天</button>`;
   el.innerHTML=html;
   el.querySelectorAll('.day-chip').forEach(b=>{
-    b.onclick=()=>{
-      currentDay=+b.dataset.day;
-      document.querySelectorAll('.day-chip').forEach(c=>c.classList.toggle('active',+c.dataset.day===currentDay));
-      clearMapSearch();
-      renderItinerary(); renderMap();
+    b.onclick=(e)=>{
+      const day=b.dataset.day;
+      if(day==='multi'){
+        // Toggle multi-day mode
+        if(multiDays){
+          multiDays=null;
+          renderDayChips(); renderItinerary(); renderMap();
+        } else {
+          multiDays=[currentDay>=0?currentDay:0];
+          renderDayChips(); renderItinerary(); renderMap();
+        }
+        return;
+      }
+      const dayNum=+day;
+      if(multiDays){
+        // Multi-day: toggle this day in/out
+        if(dayNum===-1){multiDays=null;currentDay=-1;renderDayChips();renderItinerary();renderMap();return;}
+        const idx=multiDays.indexOf(dayNum);
+        if(idx>=0){
+          multiDays.splice(idx,1);
+          if(multiDays.length===0) multiDays=null;
+        } else {
+          multiDays.push(dayNum);
+          multiDays.sort((a,b)=>a-b);
+        }
+        renderDayChips(); renderItinerary(); renderMap();
+      } else {
+        // Single day mode
+        currentDay=dayNum;
+        multiDays=null;
+        document.querySelectorAll('.day-chip').forEach(c=>{
+          c.classList.remove('active','multi-selected');
+          if(+c.dataset.day===currentDay) c.classList.add('active');
+        });
+        clearMapSearch();
+        renderItinerary(); renderMap();
+      }
     };
   });
 }
@@ -1478,6 +1530,7 @@ function renderItinerary(){
   updatePlanLabel();
   const panel=document.getElementById('cards-panel');
   panel.classList.toggle('edit-mode',editMode);
+  if(multiDays&&multiDays.length>0){ renderMultiDayKanban(panel); return; }
   if(currentDay===-1){ renderOverallCards(panel); return; }
   const date=TRIP_DATES[currentDay], itin=getActiveItinerary(), items=itin[date]||[];
   const now=getNowJST(),isToday=now.dateStr===date;
@@ -1578,6 +1631,77 @@ function renderOverallCards(panel){
     });
   });
   panel.innerHTML=html;
+}
+
+function renderMultiDayKanban(panel){
+  const dayColors=['#e91e63','#ff9800','#4caf50','#2196f3','#9c27b0','#607d8b','#795548','#009688'];
+  const itin=getActiveItinerary();
+  const _dates=getTripDates();
+  const typeIcons={spot:'🏯',restaurant:'🍽',snack:'🍡',hotel:'🏨',transport:'🚗',airport:'✈️'};
+  let html='<div class="multi-day-container">';
+  multiDays.forEach(di=>{
+    const date=_dates[di];
+    const items=itin[date]||[];
+    const color=dayColors[di%dayColors.length];
+    html+=`<div class="multi-day-column" data-dayidx="${di}"
+      ondragover="onMultiDayDragOver(event,this)" ondragleave="onMultiDayDragLeave(this)"
+      ondrop="onMultiDayDrop(event,${di})">`;
+    html+=`<div class="multi-day-header" style="border-left:3px solid ${color}">
+      ${getDayShort(di)} ${getDayLabel(di)}
+      <span style="font-weight:400;color:var(--text2);font-size:11px;margin-left:6px">${items.length} 項</span>
+    </div>`;
+    html+=`<div class="multi-day-cards">`;
+    items.forEach((item,idx)=>{
+      const icon=typeIcons[item.type]||'📍';
+      html+=`<div class="card" draggable="true" data-fromday="${di}" data-fromidx="${idx}"
+        ondragstart="onMultiCardDragStart(event,${di},${idx})"
+        ondragend="onMultiCardDragEnd(event)"
+        style="cursor:grab;padding:8px 10px;border-left:3px solid ${color}">`;
+      html+=`<div style="display:flex;align-items:center;gap:6px">`;
+      html+=`<span style="font-size:14px">${item.icon||icon}</span>`;
+      html+=`<div style="flex:1;min-width:0">`;
+      html+=`<div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>`;
+      html+=`<div style="font-size:11px;color:var(--text2)">${item.time}${item.duration?' ・ '+item.duration:''}</div>`;
+      html+=`</div></div></div>`;
+    });
+    if(items.length===0) html+=`<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">拖曳景點到這裡</div>`;
+    html+=`</div></div>`;
+  });
+  html+=`</div>`;
+  panel.innerHTML=html;
+}
+
+// Multi-day drag and drop
+let _multiDragFrom=null;
+function onMultiCardDragStart(e,dayIdx,itemIdx){
+  _multiDragFrom={dayIdx,itemIdx};
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/multi-drag',JSON.stringify({dayIdx,itemIdx}));
+  e.target.style.opacity='0.4';
+}
+function onMultiCardDragEnd(e){
+  e.target.style.opacity='1';
+  _multiDragFrom=null;
+  document.querySelectorAll('.multi-day-column.dragover').forEach(el=>el.classList.remove('dragover'));
+}
+function onMultiDayDragOver(e,col){
+  e.preventDefault();
+  col.classList.add('dragover');
+}
+function onMultiDayDragLeave(col){
+  col.classList.remove('dragover');
+}
+function onMultiDayDrop(e,toDayIdx){
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  let from=_multiDragFrom;
+  if(!from){
+    try{from=JSON.parse(e.dataTransfer.getData('text/multi-drag'));}catch(err){return;}
+  }
+  if(!from||from.dayIdx===undefined) return;
+  if(from.dayIdx===toDayIdx) return; // same column, skip
+  moveItemToDay(from.dayIdx,from.itemIdx,toDayIdx);
+  renderDayChips();
 }
 
 function onCardClick(idx){
