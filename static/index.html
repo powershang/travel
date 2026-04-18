@@ -1532,12 +1532,18 @@ function renderItinerary(){
       if(item.coords&&item.coords[0]>30) html+=`<a class="btn btn-nav" href="${gmapSearchUrl(item.gmap||item.name,item.coords)}" target="_blank" onclick="event.stopPropagation()">📍 Google Maps</a>`;
       if(item.phone) html+=`<a class="btn btn-call" href="tel:${item.phone}" onclick="event.stopPropagation()">📞 ${item.phone}</a>`;
       if(item.tabelog) html+=`<a class="btn btn-link" href="${item.tabelog}" target="_blank" onclick="event.stopPropagation()">⭐ Tabelog</a>`;
+      html+=`</div>`;
+      html+=`<div class="card-actions" style="margin-top:6px;border-top:1px solid var(--border);padding-top:8px">`;
+      html+=`<button class="btn" onclick="event.stopPropagation();openMoveToDay(${idx})" style="background:#e3f2fd;color:#1565c0;border-color:#bbdefb;font-size:11px">📅 移到其他天</button>`;
+      html+=`<button class="btn" onclick="event.stopPropagation();sendToSpotLibrary(${idx})" style="background:#f3e5f5;color:#7b1fa2;border-color:#e1bee7;font-size:11px">↩ 存入景點庫</button>`;
       html+=`</div></div>`;
     }
     // Edit bar (visible in edit mode)
     html+=`<div class="edit-bar">`;
     html+=`<span class="drag-handle" title="拖曳排序">⠿</span>`;
     html+=`<button class="btn btn-edit" onclick="event.stopPropagation();openEditPanel(${idx})">✏️ 編輯</button>`;
+    html+=`<button class="btn" onclick="event.stopPropagation();openMoveToDay(${idx})" style="background:#e3f2fd;color:#1565c0;border-color:#bbdefb">📅 移到其他天</button>`;
+    html+=`<button class="btn" onclick="event.stopPropagation();sendToSpotLibrary(${idx})" style="background:#f3e5f5;color:#7b1fa2;border-color:#e1bee7">↩ 存入景點庫</button>`;
     html+=`<button class="btn btn-del" onclick="event.stopPropagation();deleteItem(${idx})">🗑 刪除</button>`;
     html+=`</div>`;
     html+=`</div>`;
@@ -1793,6 +1799,86 @@ function saveNewSpot(){
   saveSpots(spots);
   closeAddSpotModal();
   renderSpotLibrary();
+}
+
+// === MOVE ITEM TO OTHER DAY ===
+function openMoveToDay(itemIdx){
+  const dates=Object.keys(getActiveItinerary()).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const list=document.getElementById('spotDayList');
+  list.innerHTML=dates.map((d,i)=>{
+    const isCurrent=(i===currentDay);
+    return `<button onclick="moveItemToDay(${currentDay},${itemIdx},${i});closeSpotDayModal()"
+      style="width:100%;text-align:left;padding:14px;margin-bottom:6px;border-radius:12px;border:1px solid ${isCurrent?'var(--pink)':'var(--border)'};background:${isCurrent?'var(--pink-light)':'var(--card)'};cursor:pointer;font-size:14px;font-family:inherit${isCurrent?';font-weight:700':''}">
+      <b>${getDayShort(i)} ${getDayLabel(i)}</b>
+      <span style="color:var(--text2);font-size:12px;margin-left:8px">${d.slice(5)}</span>
+      ${isCurrent?'<span style="color:var(--pink);font-size:11px;margin-left:8px">(目前)</span>':''}
+    </button>`;
+  }).join('');
+  document.getElementById('spotDayModal').querySelector('h2').textContent='📅 移到哪一天？';
+  document.getElementById('spotDayModal').classList.add('open');
+}
+
+function moveItemToDay(fromDayIdx,itemIdx,toDayIdx){
+  if(fromDayIdx===toDayIdx) return;
+  const plans=loadPlans();
+  const p=plans.plans.find(p=>p.id===plans.activeId);
+  if(!p) return;
+  const dates=Object.keys(p.data.itinerary).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const fromDate=dates[fromDayIdx];
+  const toDate=dates[toDayIdx];
+  if(!fromDate||!toDate) return;
+  const items=p.data.itinerary[fromDate];
+  if(!items||itemIdx<0||itemIdx>=items.length) return;
+  // Splice item from source day
+  const [item]=items.splice(itemIdx,1);
+  // Push to target day
+  if(!p.data.itinerary[toDate]) p.data.itinerary[toDate]=[];
+  p.data.itinerary[toDate].push(item);
+  savePlansData(plans);
+  renderItinerary(); renderMap();
+}
+
+// === SEND TO SPOT LIBRARY ===
+function sendToSpotLibrary(itemIdx){
+  const itin=getActiveItinerary();
+  const date=TRIP_DATES[currentDay];
+  const items=itin[date]||[];
+  if(itemIdx<0||itemIdx>=items.length) return;
+  const item=items[itemIdx];
+  if(!confirm(`將「${item.name}」從行程移回景點庫？`)) return;
+
+  const plans=loadPlans();
+  const p=plans.plans.find(p=>p.id===plans.activeId);
+  if(!p) return;
+
+  // If item has spotId, spot already in library — just remove from itinerary
+  // If no spotId, create a new spot from item data
+  if(!item.spotId){
+    const spot={
+      id:genSpotId(),
+      name:item.name,
+      type:item.type||'spot',
+      duration:item.duration||'',
+      note:item.note||'',
+      phone:item.phone||'',
+      where:item.drive||'',
+      coords:item.coords||null,
+      createdAt:new Date().toISOString()
+    };
+    if(!p.data.spots) p.data.spots=[];
+    p.data.spots.push(spot);
+    // Mark item with spotId before removing (in case we want to reference later)
+    item.spotId=spot.id;
+  }
+
+  // Remove item from itinerary
+  const dates=Object.keys(p.data.itinerary).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  dates.forEach(d=>{
+    p.data.itinerary[d]=p.data.itinerary[d].filter((_,i)=>!(d===date&&i===itemIdx));
+  });
+
+  savePlansData(plans);
+  renderItinerary(); renderMap(); renderSpotLibrary();
 }
 
 // === NOTES ===
