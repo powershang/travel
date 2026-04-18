@@ -1686,9 +1686,12 @@ function renderMultiDayKanban(panel){
       const icon=typeIcons[item.type]||'📍';
       html+=`<div class="card" draggable="true" data-fromday="${di}" data-fromidx="${idx}"
         ondragstart="onMultiCardDragStart(event,${di},${idx})"
+        ondragover="onMultiCardDragOver(event,this)"
+        ondragleave="onMultiCardDragLeave(this)"
+        ondrop="onMultiCardDrop(event,${di},${idx})"
         ondragend="onMultiCardDragEnd(event)"
         style="cursor:grab;padding:8px 10px;border-left:3px solid ${color}">`;
-      html+=`<div style="display:flex;align-items:center;gap:6px">`;
+      html+=`<div style="display:flex;align-items:center;gap:6px;pointer-events:none">`;
       html+=`<span style="font-size:14px">${item.icon||icon}</span>`;
       html+=`<div style="flex:1;min-width:0">`;
       html+=`<div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.name}</div>`;
@@ -1742,6 +1745,62 @@ function onMultiDayDrop(e,toDayIdx){
   if(!from||from.dayIdx===undefined) return;
   if(from.dayIdx===toDayIdx) return;
   moveItemToDay(from.dayIdx,from.itemIdx,toDayIdx);
+  renderMultiDayKanban(document.getElementById('cards-panel'));
+}
+
+// Multi-day: card-level drag over/drop for same-column reorder
+function onMultiCardDragOver(e,el){
+  e.preventDefault();
+  e.stopPropagation();
+  el.style.borderTop='2px solid var(--pink)';
+}
+function onMultiCardDragLeave(el){
+  el.style.borderTop='';
+}
+function onMultiCardDrop(e,toDayIdx,toIdx){
+  e.preventDefault();
+  e.stopPropagation();
+  e.currentTarget.style.borderTop='';
+  // Remove column-level dragover
+  const col=e.currentTarget.closest('.multi-day-column');
+  if(col) col.classList.remove('dragover');
+
+  // Check spot library drag
+  const spotId=e.dataTransfer.getData('text/spot-id');
+  if(spotId){
+    addSpotToItinerary(spotId,toDayIdx);
+    renderMultiDayKanban(document.getElementById('cards-panel'));
+    return;
+  }
+
+  let from=_multiDragFrom;
+  if(!from){try{from=JSON.parse(e.dataTransfer.getData('text/multi-drag'));}catch(err){return;}}
+  if(!from||from.dayIdx===undefined) return;
+
+  const plans=loadPlans();
+  const p=plans.plans.find(p=>p.id===plans.activeId);
+  if(!p) return;
+  const dates=Object.keys(p.data.itinerary).filter(k=>/^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const fromDate=dates[from.dayIdx];
+  const toDate=dates[toDayIdx];
+  if(!fromDate||!toDate) return;
+
+  if(from.dayIdx===toDayIdx){
+    // Same column reorder
+    const items=p.data.itinerary[toDate];
+    if(from.itemIdx===toIdx) return;
+    const [item]=items.splice(from.itemIdx,1);
+    const insertAt=from.itemIdx<toIdx?toIdx-1:toIdx;
+    items.splice(insertAt,0,item);
+  } else {
+    // Cross-column move: insert at specific position
+    const fromItems=p.data.itinerary[fromDate];
+    const [item]=fromItems.splice(from.itemIdx,1);
+    if(!p.data.itinerary[toDate]) p.data.itinerary[toDate]=[];
+    p.data.itinerary[toDate].splice(toIdx,0,item);
+  }
+  savePlansData(plans);
+  _multiDragFrom=null;
   renderMultiDayKanban(document.getElementById('cards-panel'));
 }
 
