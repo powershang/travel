@@ -1634,6 +1634,9 @@ function renderOverallCards(panel){
 }
 
 function renderMultiDayKanban(panel){
+  // 保存水平捲動位置
+  const oldContainer=panel.querySelector('.multi-day-container');
+  const scrollLeft=oldContainer?oldContainer.scrollLeft:0;
   const dayColors=['#e91e63','#ff9800','#4caf50','#2196f3','#9c27b0','#607d8b','#795548','#009688'];
   const itin=getActiveItinerary();
   const _dates=getTripDates();
@@ -1703,6 +1706,9 @@ function renderMultiDayKanban(panel){
   });
   html+=`</div>`;
   panel.innerHTML=html;
+  // 恢復水平捲動位置
+  const newContainer=panel.querySelector('.multi-day-container');
+  if(newContainer&&scrollLeft) newContainer.scrollLeft=scrollLeft;
 }
 
 // Multi-day drag and drop
