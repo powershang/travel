@@ -1639,6 +1639,37 @@ function renderMultiDayKanban(panel){
   const _dates=getTripDates();
   const typeIcons={spot:'🏯',restaurant:'🍽',snack:'🍡',hotel:'🏨',transport:'🚗',airport:'✈️'};
   let html='<div class="multi-day-container">';
+
+  // === 景點庫欄 ===
+  const spots=getSpots();
+  const placedIds=new Set();
+  Object.values(itin).forEach(items=>{if(Array.isArray(items)) items.forEach(item=>{if(item.spotId) placedIds.add(item.spotId);});});
+  const unplacedSpots=spots.filter(s=>!placedIds.has(s.id));
+  html+=`<div class="multi-day-column" data-dayidx="spotlib" style="border-color:var(--accent)"
+    ondragover="onMultiDayDragOver(event,this)" ondragleave="onMultiDayDragLeave(this)"
+    ondrop="onMultiDayDropSpotLib(event)">`;
+  html+=`<div class="multi-day-header" style="border-left:3px solid var(--accent);background:rgba(107,123,60,.06)">
+    🗂 景點庫
+    <span style="font-weight:400;color:var(--text2);font-size:11px;margin-left:6px">${unplacedSpots.length} 待排</span>
+  </div>`;
+  html+=`<div class="multi-day-cards">`;
+  unplacedSpots.forEach(s=>{
+    const icon=typeIcons[s.type]||'📍';
+    html+=`<div class="card" draggable="true" data-spotid="${s.id}"
+      ondragstart="onMultiSpotDragStart(event,'${s.id}')"
+      ondragend="onMultiCardDragEnd(event)"
+      style="cursor:grab;padding:8px 10px;border-left:3px solid var(--accent)">`;
+    html+=`<div style="display:flex;align-items:center;gap:6px">`;
+    html+=`<span style="font-size:14px">${icon}</span>`;
+    html+=`<div style="flex:1;min-width:0">`;
+    html+=`<div style="font-weight:600;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.name}</div>`;
+    html+=`<div style="font-size:11px;color:var(--text2)">${s.duration||''}${s.where?' ・ '+s.where:''}</div>`;
+    html+=`</div></div></div>`;
+  });
+  if(unplacedSpots.length===0) html+=`<div style="padding:20px;text-align:center;color:var(--text2);font-size:12px">所有景點都已排入行程</div>`;
+  html+=`</div></div>`;
+
+  // === 各天欄 ===
   multiDays.forEach(di=>{
     const date=_dates[di];
     const items=itin[date]||[];
@@ -1694,14 +1725,64 @@ function onMultiDayDragLeave(col){
 function onMultiDayDrop(e,toDayIdx){
   e.preventDefault();
   e.currentTarget.classList.remove('dragover');
+
+  // Check if dragging from spot library
+  const spotId=e.dataTransfer.getData('text/spot-id');
+  if(spotId){
+    addSpotToItinerary(spotId,toDayIdx);
+    renderMultiDayKanban(document.getElementById('cards-panel'));
+    return;
+  }
+
+  // Otherwise, dragging between day columns
   let from=_multiDragFrom;
   if(!from){
     try{from=JSON.parse(e.dataTransfer.getData('text/multi-drag'));}catch(err){return;}
   }
   if(!from||from.dayIdx===undefined) return;
-  if(from.dayIdx===toDayIdx) return; // same column, skip
+  if(from.dayIdx===toDayIdx) return;
   moveItemToDay(from.dayIdx,from.itemIdx,toDayIdx);
-  renderDayChips();
+  renderMultiDayKanban(document.getElementById('cards-panel'));
+}
+
+// Multi-day: drag from spot library
+function onMultiSpotDragStart(e,spotId){
+  e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/spot-id',spotId);
+  e.dataTransfer.setData('text/from-spotlib','1');
+  e.target.style.opacity='0.4';
+}
+// Multi-day: drop on spot library column (return from itinerary)
+function onMultiDayDropSpotLib(e){
+  e.preventDefault();
+  e.currentTarget.classList.remove('dragover');
+  // Check if dragging from itinerary (card drag)
+  let from=_multiDragFrom;
+  if(!from){try{from=JSON.parse(e.dataTransfer.getData('text/multi-drag'));}catch(err){}}
+  if(from&&from.dayIdx!==undefined){
+    // Get the item to find/create spotId, then remove from itinerary
+    const itin=getActiveItinerary();
+    const dates=getTripDates();
+    const date=dates[from.dayIdx];
+    const items=itin[date]||[];
+    if(from.itemIdx>=0&&from.itemIdx<items.length){
+      const item=items[from.itemIdx];
+      // Create spot if needed
+      if(!item.spotId){
+        const spot={id:genSpotId(),name:item.name,type:item.type||'spot',duration:item.duration||'',note:item.note||'',phone:item.phone||'',where:item.drive||'',coords:item.coords||null,createdAt:new Date().toISOString()};
+        const plans=loadPlans();
+        const p=plans.plans.find(p=>p.id===plans.activeId);
+        if(p){if(!p.data.spots)p.data.spots=[];p.data.spots.push(spot);item.spotId=spot.id;}
+      }
+      // Remove from itinerary
+      items.splice(from.itemIdx,1);
+      const plans=loadPlans();
+      savePlansData(plans);
+      renderMultiDayKanban(document.getElementById('cards-panel'));
+      renderSpotLibrary();
+    }
+  }
+  _multiDragFrom=null;
 }
 
 function onCardClick(idx){
