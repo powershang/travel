@@ -1575,7 +1575,7 @@ function renderItinerary(){
     html+=`<div class="card-info"><div class="card-name">${numTag}${item.name}</div>`;
     {const nd=['spot','restaurant','snack'].includes(item.type);const ds=item.duration?`⏱${item.duration}`:nd?`<span style="color:#ff9800;font-weight:600">⏱ 未填</span>`:'';
     let resBadge='';
-    if(item.type==='restaurant'){const sp=s=>s.replace(/[\(（][^)）]*[\)）]/g,'').trim();const ri=reservations.findIndex(r=>r.name===item.name||sp(r.name)===sp(item.name));if(ri>=0){const st=resStatusMap[ri];resBadge=st===true?`<span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">✓ 已預約</span>`:st==='w'?`<span style="background:#e3f2fd;color:#1565c0;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">現場排</span>`:st==='x'?`<span style="background:#ffebee;color:#c62828;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">✗ 無法預約</span>`:'';}}
+    if(item.type==='restaurant'){const ri=reservations.findIndex(r=>r.name===item.name||_normResName(r.name)===_normResName(item.name));if(ri>=0){const st=resStatusMap[ri];resBadge=st===true?`<span style="background:#e8f5e9;color:#2e7d32;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">✓ 已預約</span>`:st==='w'?`<span style="background:#e3f2fd;color:#1565c0;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">現場排</span>`:st==='x'?`<span style="background:#ffebee;color:#c62828;font-size:10px;padding:1px 5px;border-radius:8px;font-weight:600">✗ 無法預約</span>`:'';}}
     html+=`<div class="card-sub">${resBadge}${resBadge&&(ds||item.type)?' · ':''}${ds}${ds&&item.type?' · ':''}${getTypeLabel(item.type)}</div></div>`;}
     html+=`<div class="card-arrow">›</div></div>`;
     if(item.note||item.phone||item.tabelog||item.coords){
@@ -1589,6 +1589,13 @@ function renderItinerary(){
       html+=`<div class="card-actions" style="margin-top:6px;border-top:1px solid var(--border);padding-top:8px">`;
       html+=`<button class="btn" onclick="event.stopPropagation();openMoveToDay(${idx})" style="background:#e3f2fd;color:#1565c0;border-color:#bbdefb;font-size:11px">📅 移到其他天</button>`;
       html+=`<button class="btn" onclick="event.stopPropagation();sendToSpotLibrary(${idx})" style="background:#f3e5f5;color:#7b1fa2;border-color:#e1bee7;font-size:11px">↩ 存入景點庫</button>`;
+      if(item.type==='restaurant'){
+        const already=isAlreadyReserved(item.name);
+        const style=already?'background:#eee;color:#999;border-color:#ddd;font-size:11px;cursor:not-allowed':'background:#fce4ec;color:#c2185b;border-color:#f8bbd0;font-size:11px';
+        const label=already?'📱 已在預約':'📱 加入預約';
+        const handler=already?'':`addToReservations(${idx})`;
+        html+=`<button class="btn" onclick="event.stopPropagation();${handler}" style="${style}" ${already?'disabled':''}>${label}</button>`;
+      }
       html+=`</div></div>`;
     }
     // Edit bar (visible in edit mode)
@@ -1597,6 +1604,11 @@ function renderItinerary(){
     html+=`<button class="btn btn-edit" onclick="event.stopPropagation();openEditPanel(${idx})">✏️ 編輯</button>`;
     html+=`<button class="btn" onclick="event.stopPropagation();openMoveToDay(${idx})" style="background:#e3f2fd;color:#1565c0;border-color:#bbdefb">📅 移到其他天</button>`;
     html+=`<button class="btn" onclick="event.stopPropagation();sendToSpotLibrary(${idx})" style="background:#f3e5f5;color:#7b1fa2;border-color:#e1bee7">↩ 存入景點庫</button>`;
+    if(item.type==='restaurant'){
+      const already=isAlreadyReserved(item.name);
+      const style=already?'background:#eee;color:#999;border-color:#ddd;cursor:not-allowed':'background:#fce4ec;color:#c2185b;border-color:#f8bbd0';
+      html+=`<button class="btn" onclick="event.stopPropagation();${already?'':'addToReservations('+idx+')'}" style="${style}" ${already?'disabled':''}>${already?'📱 已在預約':'📱 加入預約'}</button>`;
+    }
     html+=`<button class="btn btn-del" onclick="event.stopPropagation();deleteItem(${idx})">🗑 刪除</button>`;
     html+=`</div>`;
     html+=`</div>`;
@@ -2106,6 +2118,79 @@ function moveItemToDay(fromDayIdx,itemIdx,toDayIdx){
   p.data.itinerary[toDate].push(item);
   savePlansData(plans);
   renderItinerary(); renderMap();
+}
+
+// === ADD ITINERARY RESTAURANT TO RESERVATIONS ===
+// 名稱比對：只剝括號（reservations.name 應與行程 name 同格式，中譯請放 zh 欄位）
+function _normResName(s){return (s||'').replace(/[\(（][^)）]*[\)）]/g,'').trim();}
+function isAlreadyReserved(name){
+  const n=_normResName(name);
+  return reservations.some(r=>_normResName(r.name)===n);
+}
+function addToReservations(itemIdx){
+  const itin=getActiveItinerary();
+  const date=TRIP_DATES[currentDay];
+  const items=itin[date]||[];
+  if(itemIdx<0||itemIdx>=items.length) return;
+  const item=items[itemIdx];
+  if(item.type!=='restaurant') return;
+  if(isAlreadyReserved(item.name)){showToastMsg('⚠️ 此餐廳已在預約清單');return;}
+
+  // 日期轉中文週幾格式（對齊佐賀既有：「5/4 (日)」）
+  const weekday=['日','一','二','三','四','五','六'];
+  const dt=new Date(date+'T00:00:00');
+  const displayDate=`${dt.getMonth()+1}/${dt.getDate()} (${weekday[dt.getDay()]})`;
+
+  // time 加午/晚餐標記（若 itinerary time 沒標）
+  let displayTime=item.time||'';
+  if(displayTime && !/午餐|晚餐/.test(displayTime)){
+    const h=parseInt(displayTime.split(':')[0]||'0',10);
+    if(h>=11&&h<=14) displayTime+=' 午餐';
+    else if(h>=17&&h<=22) displayTime+=' 晚餐';
+  }
+
+  // pax 預設：沿用當前方案 reservations 最後一筆；若沒有則空字串
+  const defaultPax=reservations.length?reservations[reservations.length-1].pax:'';
+
+  // 從 note 萃取 cuisine / price（啟發式）
+  const note=(item.note||'').split('\n');
+  let cuisine='',price='';
+  for(const line of note){
+    if(/^【/.test(line)) continue; // 跳過【中譯】【訂位】
+    if(!cuisine && line.trim() && !/^[₩¥$]|^\d/.test(line.trim())){cuisine=line.trim();}
+    if(!price && /[₩¥$]\s*[\d,]/.test(line)){price=line.trim();break;}
+  }
+
+  const newRes={
+    name:item.name,
+    zh:item.name,
+    date:displayDate,
+    time:displayTime,
+    phone:item.phone||'',
+    tabelog:'',
+    cuisine:cuisine,
+    price:price,
+    pax:defaultPax,
+    note:item.note||'',
+    coords:item.coords||null,
+  };
+
+  // 寫入 active plan
+  const plans=loadPlans();
+  const p=plans.plans.find(pp=>pp.id===plans.activeId);
+  if(!p) return;
+  if(!p.data.reservations) p.data.reservations=[];
+  if(!p.data.resOrder) p.data.resOrder=[];
+  p.data.reservations.push(newRes);
+  p.data.resOrder.push(p.data.reservations.length-1);
+  // 同步到全域變數（renderReservations 讀的是全域）
+  reservations=p.data.reservations;
+  resOrder=p.data.resOrder;
+  savePlansData(plans);
+
+  renderItinerary();           // 按鈕變灰
+  renderReservations();        // 預約 tab 立即有卡
+  showToastMsg(`✅ 已加入預約：${item.name}`);
 }
 
 // === SEND TO SPOT LIBRARY ===
