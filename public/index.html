@@ -2419,11 +2419,52 @@ function renderReservations(){
       h+=`<div class="res-actions"><a class="btn btn-call" href="tel:${r.phone}">📞 ${r.phone}</a>`;
       if(r.coords) h+=`<a class="btn btn-nav" href="${gmapSearchUrl(r.name,r.coords)}" target="_blank">📍 Google Maps</a>`;
       if(r.tabelog) h+=`<a class="btn btn-link" href="${r.tabelog}" target="_blank">⭐ Tabelog</a>`;
-      h+=`<button class="res-status${statusCls}" onclick="toggleResStatus(${i})">${statusLabel}</button></div></div>`;
+      h+=`<button class="res-status${statusCls}" onclick="toggleResStatus(${i})">${statusLabel}</button>`;
+      h+=`<button class="btn btn-del" onclick="deleteReservation(${i})" style="font-size:12px;padding:6px 10px" title="刪除此預約">🗑</button>`;
+      h+=`</div></div>`;
     });
     if(isGroup) h+=`</div>`;
   });
   s.innerHTML=h;
+}
+
+function deleteReservation(i){
+  if(i<0||i>=reservations.length) return;
+  const r=reservations[i];
+  const display=r.zh||r.name||'此預約';
+  if(!confirm(`確定要刪除預約「${display}」嗎？\n（此動作無法復原）`)) return;
+
+  // 1. 從 reservations 陣列移除
+  reservations.splice(i,1);
+
+  // 2. 重建 resStatusMap：把 key > i 的全部減 1，刪掉 key == i
+  const newMap={};
+  Object.keys(resStatusMap).forEach(k=>{
+    const n=parseInt(k,10);
+    if(isNaN(n)) return;
+    if(n===i) return;           // 刪掉的那筆
+    if(n<i)  newMap[n]=resStatusMap[k];
+    else     newMap[n-1]=resStatusMap[k];
+  });
+  resStatusMap=newMap;
+
+  // 3. 重建 resOrder：濾掉 i，並把 > i 的減 1
+  resOrder=resOrder.filter(x=>x!==i).map(x=>x>i?x-1:x);
+
+  // 4. 寫入 active plan + 持久化
+  const plans=loadPlans();
+  const p=plans.plans.find(pp=>pp.id===plans.activeId);
+  if(p){
+    p.data.reservations=reservations;
+    p.data.resStatusMap=resStatusMap;
+    p.data.resOrder=resOrder;
+    savePlansData(plans);
+  }
+
+  // 5. 刷新 UI（預約頁 + 行程頁 badge/按鈕狀態）
+  renderReservations();
+  renderItinerary();
+  showToastMsg(`🗑 已刪除預約：${display}`);
 }
 let _dragSrc=null;
 function resDragStart(e,i){_dragSrc=i;setTimeout(()=>e.target.classList.add('dragging'),0);}
