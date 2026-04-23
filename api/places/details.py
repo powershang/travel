@@ -11,7 +11,7 @@ class handler(BaseHTTPRequestHandler):
             self._json({'result': {}})
             return
         r = requests.get('https://maps.googleapis.com/maps/api/place/details/json', params={
-            'place_id': pid, 'key': api_key, 'language': 'ja',
+            'place_id': pid, 'key': api_key, 'language': 'zh-TW',
             'fields': 'name,geometry,formatted_phone_number,rating,user_ratings_total,formatted_address,opening_hours,website,price_level,types,reviews,photos'
         }, timeout=5)
         self._json(r.json())

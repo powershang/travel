@@ -49,8 +49,8 @@ def places_autocomplete():
     if not q or not GOOGLE_API_KEY:
         return jsonify({'predictions': []})
     r = requests.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', params={
-        'input': q, 'key': GOOGLE_API_KEY, 'language': 'ja', 'components': 'country:jp',
-        'location': '33.25,130.1', 'radius': 80000
+        'input': q, 'key': GOOGLE_API_KEY, 'language': 'zh-TW',
+        'components': 'country:jp|country:kr'
     }, timeout=5)
     return jsonify(r.json())
 
@@ -60,7 +60,7 @@ def places_details():
     if not pid or not GOOGLE_API_KEY:
         return jsonify({'result': {}})
     r = requests.get('https://maps.googleapis.com/maps/api/place/details/json', params={
-        'place_id': pid, 'key': GOOGLE_API_KEY, 'language': 'ja',
+        'place_id': pid, 'key': GOOGLE_API_KEY, 'language': 'zh-TW',
         'fields': 'name,geometry,formatted_phone_number,rating,user_ratings_total,formatted_address,opening_hours,website,price_level,types,reviews,photos'
     }, timeout=5)
     return jsonify(r.json())

@@ -11,8 +11,8 @@ class handler(BaseHTTPRequestHandler):
             self._json({'predictions': []})
             return
         r = requests.get('https://maps.googleapis.com/maps/api/place/autocomplete/json', params={
-            'input': q, 'key': api_key, 'language': 'ja', 'components': 'country:jp',
-            'location': '33.25,130.1', 'radius': 80000
+            'input': q, 'key': api_key, 'language': 'zh-TW',
+            'components': 'country:jp|country:kr'
         }, timeout=5)
         self._json(r.json())
 
