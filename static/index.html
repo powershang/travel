@@ -2394,10 +2394,27 @@ function _buildResGroups(){
   });
   return groups;
 }
+function _resSortKey(idx){
+  const r=reservations[idx]||{};
+  const dm=String(r.date||'').match(/(\d+)\s*\/\s*(\d+)/);
+  const tm=String(r.time||'').match(/(\d+):(\d+)/);
+  const M=dm?+dm[1]:99, D=dm?+dm[2]:99;
+  const H=tm?+tm[1]:99, mi=tm?+tm[2]:99;
+  return M*1e8+D*1e6+H*100+mi;
+}
+function sortReservationsByDateTime(){
+  if(!reservations.length) return;
+  if(!resOrder.length||resOrder.length!==reservations.length) resOrder=reservations.map((_,i)=>i);
+  resOrder=resOrder.slice().sort((a,b)=>_resSortKey(a)-_resSortKey(b));
+  const plans=loadPlans();
+  const p=plans.plans.find(pp=>pp.id===plans.activeId);
+  if(p){p.data.resOrder=resOrder; savePlansData(plans);}
+  renderReservations();
+}
 function renderReservations(){
   const s=document.getElementById('resScroll');
   if(!reservations.length){s.innerHTML='<div style="text-align:center;color:#999;padding:40px 0">此方案尚未設定預約資料</div>';return}
-  let h='<div class="section-title">預約人：Wu Tsung Hsuan ・ +886-981053092</div>';
+  let h='<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>預約人：Wu Tsung Hsuan ・ +886-981053092</span><button onclick="sortReservationsByDateTime()" style="background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;border-radius:8px;font-size:12px;padding:6px 12px;font-weight:600;cursor:pointer">🔃 依日期時間排序</button></div>';
   const altLabels=['A','B','C','D','E'];
   _buildResGroups().forEach(g=>{
     const isGroup=g.items.length>1;
