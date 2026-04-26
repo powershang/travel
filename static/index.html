@@ -1526,6 +1526,21 @@ function updatePlanLabel(){
     foodSub.textContent=isKorea?'當地特色美食 韓文+中文 給店員看':'當地特色美食 日文+中文 給店員看';
   }
 }
+function _itinTimeKey(row){
+  const m=String((row&&row.time)||'').match(/(\d+):(\d+)/);
+  return m?(+m[1])*60+(+m[2]):99*60;
+}
+function sortItineraryByTime(){
+  if(currentDay<0) return;
+  const date=TRIP_DATES[currentDay], itin=getActiveItinerary();
+  const rows=itin[date];
+  if(!rows||!rows.length) return;
+  rows.sort((a,b)=>_itinTimeKey(a)-_itinTimeKey(b));
+  const plans=loadPlans();
+  const p=plans.plans.find(pp=>pp.id===plans.activeId);
+  if(p){p.data.itinerary=itin; savePlansData(plans);}
+  renderItinerary(); renderMap();
+}
 function renderItinerary(){
   updatePlanLabel();
   const panel=document.getElementById('cards-panel');
@@ -1540,7 +1555,7 @@ function renderItinerary(){
     html+=`<div id="countdownBar" class="countdown-bar" style="display:none"></div>`;
   }
   const _dates=getTripDates();
-  html+=`<div class="section-title">${getDayLabel(currentDay)} — ${getDayRegion(currentDay)}</div>`;
+  html+=`<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${getDayLabel(currentDay)} — ${getDayRegion(currentDay)}</span><button onclick="sortItineraryByTime()" style="background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;border-radius:8px;font-size:12px;padding:6px 12px;font-weight:600;cursor:pointer">🔃 依時間排序</button></div>`;
   let mapIdx=0;
   items.forEach((item,idx)=>{
     const hasMap=item.coords&&item.coords[0]>30;
