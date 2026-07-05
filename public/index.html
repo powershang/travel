@@ -301,6 +301,64 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;o
 #fallback-banner{position:fixed;bottom:calc(var(--tab-h) + var(--safe-bottom));left:0;right:0;background:#c47a3a;color:#fff;text-align:center;font-size:12px;font-weight:600;padding:5px 12px;z-index:99;display:none}
 body.fallback-mode #fallback-banner{display:block}
 body.fallback-mode .content{height:calc(100dvh - var(--tab-h) - var(--safe-bottom) - 30px)}
+
+/* === UI 體感強化 === */
+/* 頁面切換淡入（只動 opacity，避免地圖 repaint 卡頓） */
+.page.active{animation:pageIn .28s ease}
+@keyframes pageIn{from{opacity:0}}
+
+/* 捲動區防止 scroll chaining（modal 內捲到底不會帶動背景） */
+.page-scroll,#cards-panel,#food-cards-panel,.modal-panel,.edit-panel-inner,.ai-modal-body,.multi-day-cards{overscroll-behavior:contain}
+
+/* Tab bar：頂部滑入指示條 + icon 微彈跳 */
+.tab-item{position:relative}
+.tab-item::before{content:'';position:absolute;top:0;left:50%;width:28px;height:3px;border-radius:0 0 3px 3px;background:var(--pink);transform:translateX(-50%) scaleX(0);transition:transform .45s var(--ease-spring)}
+.tab-item.active::before{transform:translateX(-50%) scaleX(1)}
+.tab-item .icon{transition:transform .45s var(--ease-spring)}
+.tab-item.active .icon{transform:translateY(-2px) scale(1.12)}
+
+/* 卡片進場（切天/切頁時由 JS 觸發 stagger） */
+@keyframes cardIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* 卡片詳情展開淡入 */
+.card-detail.open{display:block;animation:detailIn .3s var(--ease-out-expo)}
+@keyframes detailIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+
+/* Modal：背景淡入 + 關閉時滑出 */
+.modal-overlay.open{animation:overlayIn .25s ease}
+@keyframes overlayIn{from{background:rgba(0,0,0,0)}}
+.modal-overlay.closing{animation:overlayOut .26s ease forwards;pointer-events:none}
+@keyframes overlayOut{to{background:rgba(0,0,0,0)}}
+.modal-overlay.closing .modal-panel{animation:slideDown .26s ease forwards}
+@keyframes slideDown{to{transform:translateY(105%)}}
+.edit-panel.open{animation:overlayIn .25s ease}
+.edit-panel.closing{animation:overlayOut .24s ease forwards;pointer-events:none}
+.edit-panel.closing .edit-panel-inner{animation:slideRightOut .24s ease forwards}
+@keyframes slideRightOut{to{transform:translateX(105%)}}
+.ai-modal-overlay.open{animation:overlayIn .25s ease}
+.ai-modal-overlay.closing{animation:aiModalOut .22s ease forwards;pointer-events:none}
+@keyframes aiModalOut{to{opacity:0}}
+
+/* Toast 退場 */
+.toast.hide{animation:toastOut .26s ease forwards}
+@keyframes toastOut{to{opacity:0;transform:translateX(-50%) translateY(10px)}}
+
+/* 載入骨架屏 */
+.skel-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.skel{background:linear-gradient(90deg,#EDE6DA 25%,#F7F2E9 50%,#EDE6DA 75%);background-size:200% 100%;animation:shimmer 1.3s ease-in-out infinite;border-radius:6px}
+@keyframes shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+.skel-chip{flex-shrink:0;width:72px;height:30px;border-radius:20px}
+
+/* 空狀態 */
+.empty-day{text-align:center;padding:48px 20px 36px;color:var(--text2);animation:cardIn .4s var(--ease-out-expo)}
+.empty-day .ico{font-size:40px;margin-bottom:10px}
+.empty-day .msg{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.empty-day .hint{font-size:12px;line-height:1.7;margin-bottom:16px}
+.empty-day button{padding:10px 22px;border-radius:10px;border:1.5px dashed rgba(198,123,92,.5);background:var(--pink-light);color:var(--pink-dark);font-size:13px;font-weight:600;cursor:pointer;transition:all .3s var(--ease-spring)}
+.empty-day button:active{transform:scale(.96)}
+
+/* 尊重減少動態偏好 */
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
@@ -727,7 +785,7 @@ function openPlanModal(){
   document.getElementById('planModal').classList.add('open');
   renderPlanList();
 }
-function closePlanModal(){document.getElementById('planModal').classList.remove('open')}
+function closePlanModal(){closeOverlay('planModal')}
 function renderPlanList(){
   const plans=loadPlans();
   const el=document.getElementById('planList');
@@ -813,7 +871,7 @@ function openEditPanel(idx){
   document.getElementById('placesResults').classList.remove('show');
   panel.classList.add('open');
 }
-function closeEditPanel(){document.getElementById('editPanel').classList.remove('open')}
+function closeEditPanel(){closeOverlay('editPanel')}
 
 function saveEditItem(){
   const itin=getActiveItinerary();
@@ -1166,10 +1224,45 @@ function loadGoogleMapsApi(){
 function showFallbackBanner(){
   document.body.classList.add('fallback-mode');
 }
+
+// === UI 體感輔助 ===
+// 輕微觸覺回饋（Android 有感，iOS 靜默忽略）
+function hapticTap(){if(navigator.vibrate){try{navigator.vibrate(8)}catch(e){}}}
+// 卡片 stagger 進場：只在「切天/切頁」時呼叫，避免每次資料更新都重播動畫
+function staggerCards(panelId){
+  const panel=document.getElementById(panelId||'cards-panel');
+  if(!panel) return;
+  const els=[...panel.querySelectorAll('.card,.food-card,.res-card,.spot-card,.res-group')]
+    .filter(c=>c.classList.contains('res-group')||!c.closest('.res-group')); // 巢狀在群組內的卡片不重複動畫
+  els.forEach((c,i)=>{
+    c.style.animation=`cardIn .35s var(--ease-out-expo) ${Math.min(i*35,320)}ms both`;
+    // 動畫結束後清掉 inline animation，否則 fill:both 會蓋掉 hover/drag 的 transform 與 opacity
+    c.addEventListener('animationend',()=>{c.style.animation=''},{once:true});
+  });
+}
+// Modal 關閉：先播退場動畫再真正隱藏
+function closeOverlay(id){
+  const o=typeof id==='string'?document.getElementById(id):id;
+  if(!o||!o.classList.contains('open')||o.classList.contains('closing')) return;
+  o.classList.add('closing');
+  setTimeout(()=>o.classList.remove('open','closing'),270);
+}
 async function init(){
-  // 顯示載入中，避免 cold start 期間閃現錯誤的預設方案
+  // 顯示骨架屏，避免 cold start 期間閃現錯誤的預設方案（比轉圈圈更有「內容快來了」的感覺）
   const cardsPanel=document.getElementById('cards-panel');
-  if(cardsPanel) cardsPanel.innerHTML='<div style="text-align:center;padding:60px 20px;color:var(--text2)"><div style="font-size:28px;margin-bottom:12px">⏳</div><div style="font-size:14px">載入行程中...</div></div>';
+  if(cardsPanel){
+    let skel='<div class="skel" style="width:140px;height:14px;margin:8px 0 12px"></div>';
+    for(let i=0;i<6;i++){
+      skel+=`<div class="skel-card" style="opacity:${1-i*0.13}">
+        <div class="skel" style="width:34px;height:16px"></div>
+        <div class="skel" style="width:34px;height:34px;border-radius:8px"></div>
+        <div style="flex:1"><div class="skel" style="width:${65-i*5}%;height:13px;margin-bottom:6px"></div><div class="skel" style="width:40%;height:10px"></div></div>
+      </div>`;
+    }
+    cardsPanel.innerHTML=skel;
+  }
+  const chipsEl=document.getElementById('dayChips');
+  if(chipsEl&&!chipsEl.children.length) chipsEl.innerHTML='<div class="skel skel-chip"></div>'.repeat(5);
 
   let dbFailed=false;
   try {
@@ -1201,6 +1294,7 @@ async function init(){
   const idx=TRIP_DATES.indexOf(today);
   if(idx>=0) currentDay=idx;
   renderDayChips(); renderItinerary(); renderFoodPage(); renderReservations(); renderSpotLibrary(); setupTabs();
+  staggerCards('cards-panel'); // 首次載入卡片依序浮現
   loadGoogleMapsApi().then(()=>setTimeout(initMap,100)).catch(e=>console.warn('Google Maps load failed',e));
   updateCountdown(); setInterval(updateCountdown,60000);
 }
@@ -1219,8 +1313,12 @@ function renderDayChips(){
   // Multi-day toggle button
   html+=`<button class="day-chip multi-btn${multiDays?' multi-active':''}" data-day="multi" title="多天模式：可同時選多天並排比較">⊞ 多天</button>`;
   el.innerHTML=html;
+  // 讓目前選中的 chip 自動捲到可視範圍（多天行程時 chip 會超出螢幕）
+  const activeChip=el.querySelector('.day-chip.active,.day-chip.multi-selected');
+  if(activeChip) setTimeout(()=>activeChip.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'}),50);
   el.querySelectorAll('.day-chip').forEach(b=>{
     b.onclick=(e)=>{
+      hapticTap();
       const day=b.dataset.day;
       if(day==='multi'){
         // Toggle multi-day mode
@@ -1256,6 +1354,8 @@ function renderDayChips(){
         });
         clearMapSearch();
         renderItinerary(); renderMap();
+        staggerCards('cards-panel');
+        b.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});
       }
     };
   });
@@ -1628,6 +1728,9 @@ function renderItinerary(){
     html+=`</div>`;
     html+=`</div>`;
   });
+  if(!items.length&&!editMode){
+    html+=`<div class="empty-day"><div class="ico">🌤️</div><div class="msg">這天還沒有安排行程</div><div class="hint">從「景點庫」拖曳景點過來，<br>或直接新增一個地點</div><button onclick="openEditPanel(-1)">＋ 新增地點</button></div>`;
+  }
   html+=`<button class="add-item-btn" onclick="openEditPanel(-1)">+ 新增地點</button>`;
   const tips=DAY_TIPS[date]||[];
   if(tips.length){
@@ -2071,14 +2174,14 @@ function openSpotDayModal(spotId){
     </button>`).join('');
   document.getElementById('spotDayModal').classList.add('open');
 }
-function closeSpotDayModal(){document.getElementById('spotDayModal').classList.remove('open');}
+function closeSpotDayModal(){closeOverlay('spotDayModal');}
 
 function openAddSpotModal(){
   ['spName','spDuration','spNote','spPhone','spWhere'].forEach(id=>{document.getElementById(id).value='';});
   document.getElementById('spType').value='spot';
   document.getElementById('addSpotModal').classList.add('open');
 }
-function closeAddSpotModal(){document.getElementById('addSpotModal').classList.remove('open');}
+function closeAddSpotModal(){closeOverlay('addSpotModal');}
 function saveNewSpot(){
   const name=document.getElementById('spName').value.trim();
   if(!name){alert('請輸入景點名稱');return;}
@@ -2259,7 +2362,7 @@ function openNoteModal(){
   document.getElementById('noteSaveStatus').textContent='自動儲存';
   document.getElementById('noteModal').classList.add('open');
 }
-function closeNoteModal(){document.getElementById('noteModal').classList.remove('open');}
+function closeNoteModal(){closeOverlay('noteModal');}
 function onNoteInput(){
   document.getElementById('noteSaveStatus').textContent='儲存中...';
   clearTimeout(_noteTimer);
@@ -2548,12 +2651,14 @@ function setupTabs(){
   document.querySelectorAll('.tab-item').forEach(tab=>{
     tab.onclick=()=>{
       const page=tab.dataset.page;if(page===currentPage) return;
+      hapticTap();
       currentPage=page;
       document.querySelectorAll('.tab-item').forEach(t=>t.classList.toggle('active',t===tab));
       document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===page));
-      if(page==='itinerary-page'&&googleMap) setTimeout(()=>{google.maps.event.trigger(googleMap,'resize');renderMap()},100);
-      if(page==='food-page') setTimeout(()=>{if(!foodMap) initFoodMap(); else google.maps.event.trigger(foodMap,'resize');},100);
-      if(page==='spots-page') renderSpotLibrary();
+      if(page==='itinerary-page'){staggerCards('cards-panel');if(googleMap) setTimeout(()=>{google.maps.event.trigger(googleMap,'resize');renderMap()},100);}
+      if(page==='food-page'){staggerCards('food-cards-panel');setTimeout(()=>{if(!foodMap) initFoodMap(); else google.maps.event.trigger(foodMap,'resize');},100);}
+      if(page==='spots-page'){renderSpotLibrary();staggerCards('spotsPanel');}
+      if(page==='res-page') staggerCards('resScroll');
     };
   });
 }
@@ -2578,8 +2683,10 @@ function exportItinerary(){
   });
 }
 function showToastMsg(msg){
+  document.querySelectorAll('.toast').forEach(t=>t.remove()); // 避免疊加
   const t=document.createElement('div');t.className='toast';t.textContent=msg;
-  document.body.appendChild(t);setTimeout(()=>t.remove(),2500);
+  document.body.appendChild(t);
+  setTimeout(()=>{t.classList.add('hide');setTimeout(()=>t.remove(),260)},2300);
 }
 function openImportModal(){
   let overlay=document.getElementById('importModal');
@@ -2595,7 +2702,7 @@ function openImportModal(){
   document.getElementById('importTextarea').value='';
   overlay.classList.add('open');
 }
-function closeImportModal(){const o=document.getElementById('importModal');if(o)o.classList.remove('open')}
+function closeImportModal(){closeOverlay('importModal')}
 function doImport(){
   const raw=document.getElementById('importTextarea').value.trim();
   if(!raw){alert('請貼上 JSON');return}
@@ -2664,7 +2771,7 @@ function applyAiSuggestion(){
   showToastMsg('✅ 已套用 AI 建議');
   closeAiReview();
 }
-function closeAiReview(){const o=document.getElementById('aiReviewModal');if(o)o.classList.remove('open')}
+function closeAiReview(){closeOverlay('aiReviewModal')}
 function simpleMarkdown(md){
   return md
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
