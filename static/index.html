@@ -359,6 +359,23 @@ body.fallback-mode .content{height:calc(100dvh - var(--tab-h) - var(--safe-botto
 
 /* 尊重減少動態偏好 */
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* 雲端同步狀態指示器 */
+#syncDot{position:fixed;right:12px;bottom:calc(var(--tab-h) + var(--safe-bottom) + 14px);z-index:150;font-size:11px;font-weight:600;padding:6px 12px;border-radius:20px;background:var(--card);border:1px solid var(--border);color:var(--text2);box-shadow:var(--shadow-ambient);opacity:0;transform:translateY(8px);transition:all .35s var(--ease-spring);pointer-events:none}
+#syncDot.show{opacity:1;transform:translateY(0)}
+#syncDot.saved{color:var(--accent);border-color:rgba(107,123,60,.35)}
+#syncDot.failed{background:#B3564A;border-color:#B3564A;color:#fff;pointer-events:auto;cursor:pointer;box-shadow:0 4px 16px rgba(179,86,74,.35)}
+#syncDot.saving .sync-spin{display:inline-block;animation:spin .8s linear infinite}
+
+/* 下拉更新提示 */
+.ptr-pill{position:fixed;top:calc(var(--safe-top) + 108px);left:50%;transform:translateX(-50%) translateY(-12px);z-index:180;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:7px 16px;font-size:12px;font-weight:600;color:var(--pink-dark);box-shadow:var(--shadow-card-hover);opacity:0;transition:all .25s var(--ease-out-expo);pointer-events:none}
+.ptr-pill.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* 今天視圖：已完成的項目淡化 + 打勾 */
+.card.past{opacity:.55;filter:saturate(.75)}
+.card.past:hover{opacity:.9;filter:none}
+.card.past .card-icon{position:relative}
+.card.past .card-icon::after{content:'✓';position:absolute;right:-4px;bottom:-4px;width:14px;height:14px;line-height:14px;border-radius:50%;background:var(--accent);color:#fff;font-size:9px;font-weight:700;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.25)}
 </style>
 </head>
 <body>
@@ -667,9 +684,29 @@ function loadPlans(){
   _plansCache.plans.forEach(migratePlanData);
   return _plansCache;
 }
+// 同步狀態指示：儲存不再靜默失敗，失敗時可點指示器重試
+let _syncTimer=null,_syncFailedPlans=null;
+function setSyncState(state){
+  let el=document.getElementById('syncDot');
+  if(!el){
+    el=document.createElement('div');el.id='syncDot';
+    el.onclick=()=>{if(_syncFailedPlans) savePlansData(_syncFailedPlans)};
+    document.body.appendChild(el);
+  }
+  el.className='show '+state;
+  el.innerHTML=state==='saving'?'<span class="sync-spin">⟳</span> 儲存中…':state==='saved'?'✓ 已儲存到雲端':'⚠️ 儲存失敗，點此重試';
+  clearTimeout(_syncTimer);
+  if(state==='saved') _syncTimer=setTimeout(()=>{el.className=''},1800);
+}
 function savePlansData(plans){
   _plansCache=plans;
-  fetch('/api/data/trip_plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(plans)}).catch(()=>{});
+  setSyncState('saving');
+  fetch('/api/data/trip_plans',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(plans)})
+    .then(r=>{
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      _syncFailedPlans=null;setSyncState('saved');
+    })
+    .catch(()=>{_syncFailedPlans=plans;setSyncState('failed')});
 }
 function savePlans(){savePlansData(loadPlans())}
 function getActivePlan(){
@@ -1247,6 +1284,60 @@ function closeOverlay(id){
   o.classList.add('closing');
   setTimeout(()=>o.classList.remove('open','closing'),270);
 }
+// 下拉更新：從雲端重新抓資料（PWA 全螢幕沒有重新整理按鈕，跨裝置同步靠這個）
+let _refreshing=false;
+async function refreshData(){
+  if(_refreshing) return;
+  _refreshing=true;
+  try{
+    const r=await fetch('/api/data/batch?keys=trip_plans');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const batch=await r.json();
+    if(batch.trip_plans&&batch.trip_plans.plans){
+      _plansCache=batch.trip_plans;
+      loadActivePlanState();
+      renderDayChips();renderItinerary();renderFoodPage();renderReservations();renderSpotLibrary();
+      if(googleMap) renderMap();
+      staggerCards(currentPage==='res-page'?'resScroll':currentPage==='spots-page'?'spotsPanel':currentPage==='food-page'?'food-cards-panel':'cards-panel');
+      showToastMsg('✅ 已同步最新資料');
+    }else{
+      showToastMsg('⚠️ 資料格式異常，未更新');
+    }
+  }catch(e){
+    showToastMsg('⚠️ 同步失敗，請檢查網路');
+  }
+  _refreshing=false;
+}
+function setupPullToRefresh(){
+  const pill=document.createElement('div');pill.className='ptr-pill';document.body.appendChild(pill);
+  ['cards-panel','resScroll','spotsPanel','food-cards-panel'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    let sy=0,armed=false,ready=false;
+    el.addEventListener('touchstart',e=>{
+      if(editMode||el.scrollTop>2) return;
+      sy=e.touches[0].clientY;armed=true;ready=false;
+    },{passive:true});
+    el.addEventListener('touchmove',e=>{
+      if(!armed||editMode||touchDragIdx!==null) return;
+      if(el.scrollTop>2){armed=false;ready=false;pill.classList.remove('show');return}
+      const dy=e.touches[0].clientY-sy;
+      if(dy>30){
+        ready=dy>85;
+        pill.textContent=ready?'⟳ 放開即更新':'↓ 繼續下拉更新';
+        pill.classList.add('show');
+      }else{pill.classList.remove('show');ready=false}
+    },{passive:true});
+    el.addEventListener('touchend',()=>{
+      if(armed&&ready&&!_refreshing){
+        hapticTap();
+        pill.textContent='⟳ 更新中…';
+        refreshData().finally(()=>pill.classList.remove('show'));
+      }else pill.classList.remove('show');
+      armed=false;ready=false;
+    });
+  });
+}
 async function init(){
   // 顯示骨架屏，避免 cold start 期間閃現錯誤的預設方案（比轉圈圈更有「內容快來了」的感覺）
   const cardsPanel=document.getElementById('cards-panel');
@@ -1295,6 +1386,7 @@ async function init(){
   if(idx>=0) currentDay=idx;
   renderDayChips(); renderItinerary(); renderFoodPage(); renderReservations(); renderSpotLibrary(); setupTabs();
   staggerCards('cards-panel'); // 首次載入卡片依序浮現
+  setupPullToRefresh();
   loadGoogleMapsApi().then(()=>setTimeout(initMap,100)).catch(e=>console.warn('Google Maps load failed',e));
   updateCountdown(); setInterval(updateCountdown,60000);
 }
@@ -1657,10 +1749,14 @@ function renderItinerary(){
   const _dates=getTripDates();
   html+=`<div class="section-title" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span>${getDayLabel(currentDay)} — ${getDayRegion(currentDay)}</span><button onclick="sortItineraryByTime()" style="background:#e3f2fd;color:#1565c0;border:1px solid #bbdefb;border-radius:8px;font-size:12px;padding:6px 12px;font-weight:600;cursor:pointer">🔃 依時間排序</button></div>`;
   let mapIdx=0;
+  // 今天視圖：目前項目之前的都算「已完成」，淡化顯示
+  let curIdx=-1;
+  if(isToday){for(let i=items.length-1;i>=0;i--){if(now.timeMin>=parseTime(items[i].time)){curIdx=i;break}}}
   items.forEach((item,idx)=>{
     const hasMap=item.coords&&item.coords[0]>30;
     if(hasMap) mapIdx++;
     const isNow=isToday&&isCurrentItem(items,idx,now.timeMin);
+    const isPast=isToday&&idx<curIdx&&!isNow;
     {
       // drive 資訊：優先用自己的，若空則看前一張卡（相容兩種資料格式）
       const selfDrive=item.drive||'';
@@ -1682,7 +1778,7 @@ function renderItinerary(){
       }
       if(dInfo) html+=`<div class="drive-info">${dInfo}</div>`;
     }
-    html+=`<div class="card${isNow?' now':''}" id="card-${idx}" draggable="true" ondragstart="onDragStart(event,${idx})" ondragover="onDragOver(event)" ondrop="onDrop(event,${idx})" ondragend="onDragEnd(event)" ontouchstart="onCardTouchStart(event,${idx})" ontouchmove="onCardTouchMove(event)" ontouchend="onCardTouchEnd()">`;
+    html+=`<div class="card${isNow?' now':''}${isPast?' past':''}" id="card-${idx}" draggable="true" ondragstart="onDragStart(event,${idx})" ondragover="onDragOver(event)" ondrop="onDrop(event,${idx})" ondragend="onDragEnd(event)" ontouchstart="onCardTouchStart(event,${idx})" ontouchmove="onCardTouchMove(event)" ontouchend="onCardTouchEnd()">`;
     html+=`<div class="card-main" onclick="onCardClick(${idx})">`;
     html+=`<span class="card-drag-handle" ontouchstart="onTouchDragStart(event,${idx})" title="拖曳排序">⠿</span>`;
     html+=`<div class="card-time">${item.time}</div><div class="card-icon ${item.type}">${item.icon}</div>`;
@@ -2001,6 +2097,14 @@ function updateCountdown(){
   if(now.dateStr!==date){bar.style.display='none';ind.style.display='none';return}
   let ci=-1;for(let i=items.length-1;i>=0;i--)if(now.timeMin>=parseTime(items[i].time)){ci=i;break}
   if(ci>=0){ind.style.display='block';ind.innerHTML=`📍 目前：${items[ci].name}`}
+  // 每分鐘同步卡片的 now/past 狀態，旅途中畫面會自己前進
+  items.forEach((it,i)=>{
+    const c=document.getElementById('card-'+i);
+    if(!c) return;
+    const isNowItem=isCurrentItem(items,i,now.timeMin);
+    c.classList.toggle('now',isNowItem);
+    c.classList.toggle('past',i<ci&&!isNowItem);
+  });
   if(ci>=0&&ci<items.length-1){const nx=items[ci+1],diff=parseTime(nx.time)-now.timeMin;if(diff>0&&diff<=180){bar.style.display='flex';bar.innerHTML=`⏳ 下一站 <b>${nx.name}</b>　${diff}分鐘後 (${nx.time})`}else bar.style.display='none'}else bar.style.display='none';
 }
 
